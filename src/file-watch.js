@@ -63,7 +63,7 @@ function fileWatch({fileChange$, watcher, steps}) {
           fileChange$.filter(queryMatches(parsed))
         )})
         // No branching. This query IS the file!
-        : remove$.map(x => x.change)
+        : remove$.map(({change: {query}}) => ({type: 'remove', path: query}))
           .startWith({type: 'add', path: query})
       return streamsMap.set(query, queryEvent$)
     }, new Map())
@@ -71,7 +71,7 @@ function fileWatch({fileChange$, watcher, steps}) {
 
     return {
       allChange$: xs.merge(allChange$, listingChange$.map(x => {
-        return Object.assign({_step: i}, x)
+        return Object.assign({step: i}, x)
       })),
       stepChange$: listingChange$
     }

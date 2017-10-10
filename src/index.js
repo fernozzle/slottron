@@ -17,7 +17,7 @@ server.on('listening', () =>
 
 // Now it's time for webpack watch
 
-/* no it's not
+//*
 const webpack = require('webpack')
 const path = require('path')
 const ProgressBarPlugin =
@@ -27,14 +27,19 @@ const compiler = webpack({
   watch: true,
   cache: true,
   context: __dirname,
-  entry: {client: './client.js'},
+  entry: {client: './client.ts'},
   output: {
     path: path.join(__dirname, '../public'),
     filename: '[name].bundle.js'
   },
   resolve: {modules: ['node_modules']},
-  plugins: [new ProgressBarPlugin()]
+  plugins: [new ProgressBarPlugin()],
+  module: {rules: [{
+    test: /\.tsx?$/,
+    use: 'ts-loader',
+    exclude: /node_modules/
+  }]}
 }, (err, stats) => {
   if (err) logger.error('Webpack:', err)
 })
-*/
+//*/

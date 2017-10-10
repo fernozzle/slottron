@@ -76,10 +76,7 @@ const steps = [
   {pattern: 'dir/story-<mood>.txt'},
   {pattern: 'story-<mood>.txt'},
 ]
-
-const watcher = chokidar.watch('.', {
-  cwd: root, ignoreInitial: false
-})
+const watcher = chokidar.watch('.', {cwd: root, ignoreInitial: false})
 const fileChange$ = xs.create({
   start: l => watcher
     .on('add', path => l.next({type: 'add', path}))
@@ -88,12 +85,20 @@ const fileChange$ = xs.create({
   stop: () => {}
 })
 
-fileChange$.addListener({})
-const doy$ = fileWatch({fileChange$, watcher, steps})
-doy$.addListener({
-  next: x => console.log('doy', x),
-  error: e => console.error('doyerror', e),
-  complete: () => console.log('doyover')
+const itemsReq$ = fileWatch({fileChange$, watcher, steps})
+
+itemsReq$.addListener({
+  next: item => {
+    console.log('itemsReq$', item)
+    const {type, step, path} = item
+    if (type === 'add') {
+      items.create({step, path})
+    } else if (type === 'remove') {
+      items.remove(null, {query: {path}})
+    }
+  },
+  error: e => console.error('itemsReq$', e),
+  complete: () => console.log('itemsReq$ complete')
 })
 
 /*
@@ -105,18 +110,6 @@ items.find().then(results => {
 // Listen for events
 items.on('created', datum => {
   console.log('Item added:', datum)
-})
-
-// Create entries
-find.file(/story/, root, files => {
-  console.log('FILES', files)
-  Promise.all(files.map(name => new Promise((res, rej) => {
-    const fn = path.relative(root, name)
-    fs.stat(path.join(root, fn), (err, stats) => {
-      if (err) rej(err)
-      res({id: fn, time: stats.mtime})
-    })
-  }))).then(entries => items.create(entries))
 })
 */
 
