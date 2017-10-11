@@ -5,14 +5,30 @@ const feathersErrors = require('feathers-errors');
 module.exports = function() {
   const app = this
 
-  console.log('RUNNING FILES.JS')
-  app.get('/files/:id', (req, res) => {
-    const filePath = path.join(app.get('SL-root'), req.params.id)
-    const stream = fs.createReadStream(filePath)
+  function doy (root, filePath, res) {
+    const stream = fs.createReadStream(path.join(root, filePath))
     stream.on('error', (err) => {
-      //res.sendStatus(404)
-      res.send(err)
+      if (err.code !== 'ENOENT') {
+        res.status(500)
+        res.send(err)
+        return
+      }
+      // Human-made file doesn't exist in the folder,
+      // so look up if it's an imaginary file with sources
+      app.service('items').find({query: {path: filePath}})
+      .then(({data: [result]}) => {
+        if (!result) {
+          res.status(404)
+          res.send(`No file, real or imaginary, exists at '${filePath}'.`)
+          return
+        }
+        res.send(result.sources)
+      })
     })
     stream.pipe(res)
+  }
+
+  app.get('/files/:id', (req, res) => {
+    doy(app.get('SL-root'), req.params.id, res)
   })
 }
