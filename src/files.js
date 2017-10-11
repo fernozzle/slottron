@@ -4,9 +4,17 @@ const fs = require('fs')
 const multer = require('multer')
 const feathersErrors = require('feathers-errors');
 
+function pathIsOkay(path) {
+  return !path.split('/').some(part => part === '..')
+}
+
 module.exports = function() {
   const app = this
   const upload = multer({
+    fileFilter: (req, file, cb) => {
+      if (pathIsOkay(req.params.id)) return cb(null, true)
+      cb(new Error('Target path outside of root'))
+    },
     storage: multer.diskStorage({
       destination: (req, file, cb) => {
         cb(null, path.join(
@@ -20,6 +28,10 @@ module.exports = function() {
     })
   })
 
+  function doFileNotFound(res, path) {
+    res.status(404)
+    res.send(`No file, real or imaginary, exists at '${filePath}'.`)
+  }
   function doy (root, filePath, res) {
     const stream = fs.createReadStream(path.join(root, filePath))
     stream.on('error', (err) => {
@@ -32,18 +44,18 @@ module.exports = function() {
       // so look up if it's an imaginary file with sources
       app.service('items').find({query: {path: filePath}})
       .then(({data: [result]}) => {
-        if (!result) {
-          res.status(404)
-          res.send(`No file, real or imaginary, exists at '${filePath}'.`)
-          return
-        }
-        res.send(result.sources)
+        if (result) res.send(result.sources)
+        doFileNotFound(res, filePath)
       })
     })
     stream.pipe(res)
   }
 
-  app.get('/files/:id', (req, res) => {
+  app.get('/files/:id', (req, res, next) => {
+    if (!pathIsOkay(req.params.id)) {
+      doFileNotFound(res, req.params.id)
+      return next()
+    }
     doy(app.get('SL-root'), req.params.id, res)
   })
   app.put('/files/:id', upload.single('file'), (req, res) => {
