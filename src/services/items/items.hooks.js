@@ -16,13 +16,13 @@ module.exports = {
     find: [hook => {
       if (hook.params.isInternal) return hook
       return Promise.all(hook.result.data.map(result => getSourcesFor(
-        hook.app.get('steps'), hook.service, result
+        hook.app.get('SL-steps'), hook.service, result
       ))).then(results => hook)
     }],
     get: [hook => {
       if (hook.params.isInternal) return hook
       return getSourcesFor(
-        hook.app.get('steps'), hook.service, hook.result
+        hook.app.get('SL-steps'), hook.service, hook.result
       ).then(result => hook)
     }],
     create: [],

@@ -18,6 +18,8 @@ const middleware = require('./middleware');
 const services = require('./services');
 const appHooks = require('./app.hooks');
 
+const files = require('./files')
+
 const app = feathers();
 
 // Load app configuration
@@ -35,6 +37,18 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(favicon(path.join(app.get('public'), 'favicon.ico')));
 // Host the public folder
 app.use('/', feathers.static(app.get('public')));
+
+app.configure(files)
+/*
+app.use('/files', (req, res, next) => {
+  console.log('req', req)
+  res.statusCode = req.method === 'OPTIONS' ? 200 : 405
+  res.setHeader('Allow', 'GET, HEAD, OPTIONS')
+  res.setHeader('Content-Length', '0')
+  res.end()
+  return
+})
+*/
 
 // Set up Plugins and providers
 app.configure(hooks());
@@ -65,20 +79,22 @@ const delay = require('xstream/extra/delay').default
 
 const fileWatch = require('./file-watch').default
 
-const root = './myProjjie'
 const items = app.service('/items')
 
 console.log(` = = = = = =                    = = = = = = `)
 console.log(`= = = = = = =   it's my turn   = = = = = = =`)
 console.log(` = = = = = =                    = = = = = = `)
 
-app.set('steps', [
+app.set('SL-root', './myProjjie')
+app.set('SL-steps', [
   {pattern: 'dir/story-<mood>.txt'},
   {pattern: 'story-<mood>.txt'},
 ])
 
-
-const watcher = chokidar.watch('.', {cwd: root, ignoreInitial: false})
+const watcher = chokidar.watch('.', {
+  cwd: app.get('SL-root'),
+  ignoreInitial: false
+})
 const fileChange$ = xs.create({
   start: l => watcher
     .on('add', path => l.next({type: 'add', path}))
@@ -87,7 +103,7 @@ const fileChange$ = xs.create({
   stop: () => {}
 })
 
-const itemsReq$ = fileWatch({fileChange$, watcher, steps: app.get('steps')})
+const itemsReq$ = fileWatch({fileChange$, watcher, steps: app.get('SL-steps')})
 
 itemsReq$.addListener({
   next: item => {
