@@ -5,7 +5,11 @@ const filters = require('./items.filters');
 
 module.exports = function () {
   const app = this;
-  const paginate = app.get('paginate');
+  //const paginate = app.get('paginate');
+  const paginate = {
+    default: Number.POSITIVE_INFINITY,
+    max: Number.POSITIVE_INFINITY
+  }
 
   const options = {
     name: 'items',

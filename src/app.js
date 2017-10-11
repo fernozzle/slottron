@@ -72,10 +72,10 @@ console.log(` = = = = = =                    = = = = = = `)
 console.log(`= = = = = = =   it's my turn   = = = = = = =`)
 console.log(` = = = = = =                    = = = = = = `)
 
-const steps = [
+app.set('steps', [
   {pattern: 'dir/story-<mood>.txt'},
   {pattern: 'story-<mood>.txt'},
-]
+])
 const watcher = chokidar.watch('.', {cwd: root, ignoreInitial: false})
 const fileChange$ = xs.create({
   start: l => watcher
@@ -85,7 +85,7 @@ const fileChange$ = xs.create({
   stop: () => {}
 })
 
-const itemsReq$ = fileWatch({fileChange$, watcher, steps})
+const itemsReq$ = fileWatch({fileChange$, watcher, steps: app.get('steps')})
 
 itemsReq$.addListener({
   next: item => {

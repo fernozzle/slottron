@@ -1,4 +1,4 @@
-
+const pattern = require('../../pattern')
 
 module.exports = {
   before: {
@@ -13,8 +13,18 @@ module.exports = {
 
   after: {
     all: [],
-    find: [],
-    get: [],
+    find: [hook => {
+      if (hook.params.isInternal) return hook
+      return Promise.all(hook.result.data.map(result => getSourcesFor(
+        hook.app.get('steps'), hook.service, result
+      ))).then(results => hook)
+    }],
+    get: [hook => {
+      if (hook.params.isInternal) return hook
+      return getSourcesFor(
+        hook.app.get('steps'), hook.service, hook.result
+      ).then(result => hook)
+    }],
     create: [],
     update: [],
     patch: [],
@@ -31,3 +41,31 @@ module.exports = {
     remove: []
   }
 };
+
+function getSourcesFor(steps, service, result) {
+  console.log('getting', result.path)
+  if (result.step === 0) {
+    result.sources = []
+    return Promise.resolve(result)
+  }
+  const parsed = pattern.parse(steps[result.step].pattern)
+
+  const stepIndex = result.step - 1
+  const prevParsed = pattern.parse(steps[stepIndex].pattern)
+
+  const params = {query: {step: stepIndex}, isInternal: true}
+  return service.find(params).then(({data}) => {
+    const sources = data.filter(({path}) => {
+      try {
+        const vars = pattern.read(prevParsed, path)
+        const query = pattern.render(parsed, vars)
+        const queryParsed = pattern.parse(query)
+        pattern.read(queryParsed, result.path)
+        return true
+      } catch (e) { return false }
+    }).map(item => item.path)
+
+    result.sources = sources
+    return result
+  })
+}
