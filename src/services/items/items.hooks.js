@@ -43,7 +43,6 @@ module.exports = {
 };
 
 function getSourcesFor(steps, service, result) {
-  console.log('getting', result.path)
   if (result.step === 0) {
     result.sources = []
     return Promise.resolve(result)

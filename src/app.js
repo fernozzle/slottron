@@ -76,6 +76,8 @@ app.set('steps', [
   {pattern: 'dir/story-<mood>.txt'},
   {pattern: 'story-<mood>.txt'},
 ])
+
+
 const watcher = chokidar.watch('.', {cwd: root, ignoreInitial: false})
 const fileChange$ = xs.create({
   start: l => watcher
@@ -100,16 +102,3 @@ itemsReq$.addListener({
   error: e => console.error('itemsReq$', e),
   complete: () => console.log('itemsReq$ complete')
 })
-
-/*
-// Fetch entries
-items.find().then(results => {
-  console.log('Items:', results)
-})
-
-// Listen for events
-items.on('created', datum => {
-  console.log('Item added:', datum)
-})
-*/
-
