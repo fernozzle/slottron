@@ -23,6 +23,7 @@ const path = require('path')
 const ProgressBarPlugin =
   require('progress-bar-webpack-plugin')
 
+/*
 const compiler = webpack({
   watch: true,
   cache: true,

@@ -12,40 +12,57 @@ function fileWatch({fileChange$, watcher, steps}) {
 
     // First we collapse into groups...
 
-    const queryChange$ = stepChange$.fold(
-      ({map}, {type, path}) => {
+    const queryChange$ = stepChange$
+    .fold(({map}, {type, path, date = new Date()}) => {
 
       const vars = pattern.read(pattern.parse(prevStep.pattern), path)
       const query = pattern.render(pattern.parse(step.pattern), vars)
 
       // Add/remove from buckets
-      let change = null
-      if (type === 'add') {
-        change = {type: 'addSource', query, path}
-        if (!map.has(query)) { // Make a new bucket
+      let change = {type: null, query, path, date}
+      if (type === 'remove') {
+        change.type = 'removeSource'
+        if (map.has(query)) {
+          const sources = map.get(query).set
+          sources.delete(path)
+          if (sources.size === 0) {
+            map.delete(query) // Remove empty bucket
+            change.type = 'remove'
+          }
+        }
+      } else { // add or update
+        if (map.has(query)) {
+          const queryPaths = map.get(query).set
+          if (!queryPaths.has(path)) {
+            queryPaths.add(path) // existent bucket
+            change.type = 'addSource'
+          } else {
+            change.type = 'update' // nothing new
+          }
+        } else {
           map.set(query, {
-            set: new Set(),
+            set: new Set([path]),
             parsed: pattern.parse(query)
           })
-          change = {type: 'add', query, path}
-        }
-        map.get(query).set.add(path)
-      } else {
-        change = {type: 'removeSource', query, path}
-        const sources = map.get(query).set
-        sources.delete(path)
-        if (sources.size === 0) {
-          map.delete(query) // Remove empty bucket
-          change = {type: 'remove', query}
+          change.type = 'add' // new bucket
         }
       }
       return {map, change}
     }, {map: new Map(), change: null}).drop(1) // Don't emit seed
 
-    dbRowChange$ = queryChange$
+    // This goes to the /activity/ service, which should reject items where date <= current value
+    const activity$ = queryChange$.map((
+      {change: {query, type, path, date}}
+    ) => ({
+      query, // To be used like a primary key
+      path,  // This is the file whose modification updated our query
+      date,  // Service has a hook that REJECTS if date <= latest ####### ACTUALLY NO THEY JUST ALL ACCUMULATE AND A REQUEST GETS THE LATEST ONE
+      type: ( // What happened to it
+        type === 'add' || type === 'addSource'
+      ) ? 'add' : (type === 'update' ? 'update' : 'remove'),
+    }))
 
     // ...Then we expand by searching/listening
-
     listingChange$ = queryChange$.filter(
       x => x.change.type === 'add' // A unique query appears!
     ).fold((streamsMap, {map, change: {type, query}}) => {
@@ -55,30 +72,59 @@ function fileWatch({fileChange$, watcher, steps}) {
         x.change.query === query
       )).take(1)
 
+
+      // What to do: write an 'expect' function
+      //
+
       const isSmart = (parsed.varNames.length > 0)
+      /*
+      const queryEvent$ = collection({
+        // If live query results are empty, pretend
+        // there's 1 fake file there with this name
+        fallbackName: pattern.renderDummy(parsed),
+        change$: xs.merge(
+          xs.from(querySearch(parsed, watcher)) // Synchronous
+            .map(path => ({type: 'add', path})),
+          fileChange$.filter(queryMatches(parsed)) // Live
+        )
+      })
+      */
+
       const queryEvent$ = isSmart
         // Branch. This query is but a portal to whatever files exist
-        ? trackCollection({parsed, remove$, change$: xs.merge(
-          querySearch(parsed, watcher),
+        ? trackCollection({query, parsed, remove$, change$: xs.merge(
+          xs.from(querySearch(parsed, watcher))
+            .map(path => ({type: 'add', path})),
           fileChange$.filter(queryMatches(parsed))
-        )})
+        )}).map(x => {x.query = query; return x})
         // No branching. This query IS the file!
-        : remove$.map(({change: {query}}) => ({type: 'remove', path: query}))
-          .startWith({type: 'add', path: query})
+        : xs.merge( // Always exists; realness only changes a property
+          xs.of({type: 'add', path: query, query, isReal:
+            querySearch(parsed, watcher).length > 0}),
+          fileChange$.filter(queryMatches(parsed))
+            .map(({type, path}) => ({ // real / imaginary
+              type: 'update', path: query, query,
+              isReal: type === 'add' || type === 'update'
+            }))
+            .endWhen(remove$),
+          remove$.mapTo({type: 'remove', path: query})
+        )
       return streamsMap.set(query, queryEvent$)
     }, new Map())
     .compose(gather)
 
     return {
-      allChange$: xs.merge(allChange$, listingChange$.map(x => {
-        return Object.assign({step: i}, x)
-      })),
+      allChange$: xs.merge(
+        allChange$,
+        activity$,
+        listingChange$.map(x => {x.step = i; return x})
+      ),
       stepChange$: listingChange$
     }
   }, {
       allChange$: xs.never(),
       stepChange$: xs.merge(
-        xs.of({type: 'add', path: './'}), xs.never()
+        xs.of({type: 'add', path: './', query: rootCaptureStep.pattern}), xs.never()
       )
   }).allChange$
 }
@@ -104,35 +150,40 @@ function querySearch(parsedPattern, watcher) {
       } catch (e) {}
     }
   }
-  return xs.from(matchingPaths).map(path => ({type: 'add', path}))
+  return matchingPaths
+  //return xs.from(matchingPaths).map(path => ({type: 'add', path}))
 }
 
 function trackCollection({parsed, change$, remove$}) {
-  const dummySet = new Set([pattern.renderDummy(parsed)])
-
-  const pathSet$ = change$.fold((paths, {type, path}) => {
-    const set = new Set(paths)
-    if (type === 'add') return set.add(path)
-    set.delete(path)
-    return set
-  }, new Set())
+  const dummyMap = new Map([[pattern.renderDummy(parsed), false]])
+  const pathIsRealMap$ = change$.fold((paths, {type, path, date}) => {
+    const map = new Map(paths)
+    if (type === 'remove') {
+      map.delete(path)
+    } else { // add or update
+      map.set(path, {isReal: true, date: true})
+    }
+    return map
+  }, new Map())
 
   const stream$ = xs.merge(
-    pathSet$.endWhen(remove$), remove$.mapTo(null)
+    pathIsRealMap$.endWhen(remove$), remove$.mapTo(null)
   ).startWith(null)
-  .map(set => set ? (set.size ? set : dummySet) : new Set())
+  .map(map => map ? (map.size ? map : dummyMap) : new Map())
 
   // Handling the dummySet requires summing up the changes
   .compose(pairwise)
   .map(([pathsOld, pathsNew]) => {
-    const paths = new Set(pathsNew)
+    const paths = new Map(pathsOld)
     const emit = []
-    for (const path of paths) {
-      if (pathsOld.has(path)) {
-        pathsOld.delete(path)
-      } else emit.push({type: 'add', path})
+    for (const [path, {isReal, date}] of pathsNew) {
+      if (paths.has(path)) {
+        paths.delete(path)
+        if (date < paths.get(path)) continue
+        emit.push({type: 'update', path, isReal})
+      } else emit.push({type: 'add', path, isReal})
     }
-    pathsOld.forEach(path => emit.push({type: 'remove', path}))
+    paths.forEach(path => emit.push({type: 'remove', path}))
     //emit.push(null)
     return xs.from(emit)
   }).flatten()

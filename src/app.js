@@ -39,16 +39,6 @@ app.use(favicon(path.join(app.get('public'), 'favicon.ico')));
 app.use('/', feathers.static(app.get('public')));
 
 app.configure(files)
-/*
-app.use('/files', (req, res, next) => {
-  console.log('req', req)
-  res.statusCode = req.method === 'OPTIONS' ? 200 : 405
-  res.setHeader('Allow', 'GET, HEAD, OPTIONS')
-  res.setHeader('Content-Length', '0')
-  res.end()
-  return
-})
-*/
 
 // Set up Plugins and providers
 app.configure(hooks());
@@ -93,12 +83,13 @@ app.set('SL-steps', [
 
 const watcher = chokidar.watch('.', {
   cwd: app.get('SL-root'),
-  ignoreInitial: false
+  ignoreInitial: false,
+  alwaysStat: true
 })
 const fileChange$ = xs.create({
   start: l => watcher
-    .on('add', path => l.next({type: 'add', path}))
-    .on('change', path => {})
+    .on('add', (path, {size, mtime}) => l.next({type: 'add', path, size, date: mtime}))
+    .on('change', (path, {size, mtime}) => l.next({type: 'update', path, size, date: mtime}))
     .on('unlink', path => l.next({type: 'remove', path})),
   stop: () => {}
 })
@@ -108,9 +99,9 @@ const itemsReq$ = fileWatch({fileChange$, watcher, steps: app.get('SL-steps')})
 itemsReq$.addListener({
   next: item => {
     console.log('itemsReq$', item)
-    const {type, step, path} = item
+    const {type, path, isReal, query, step} = item
     if (type === 'add') {
-      items.create({step, path})
+      items.create({step, path, isReal, query})
     } else if (type === 'remove') {
       items.remove(null, {query: {path}})
     }
