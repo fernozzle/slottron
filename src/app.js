@@ -98,14 +98,18 @@ const itemsReq$ = fileWatch({fileChange$, watcher, steps: app.get('SL-steps')})
 
 itemsReq$.addListener({
   next: item => {
-    console.log('itemsReq$', item)
-    const {type, path, isReal, query, step} = item
+    if (item.activity) {
+      console.log('/group-activity/', item)
+      return
+    }
+    const {type, path, isReal, group, step} = item
+    console.log('/items/', {type, path, isReal, group})
     if (type === 'add') {
-      items.create({step, path, isReal, query})
+      items.create({step, path, isReal, group})
     } else if (type === 'remove') {
       items.remove(null, {query: {path}})
     }
   },
-  error: e => console.error('itemsReq$', e),
+  error: e => console.error('itemsReq$ ERROR', e),
   complete: () => console.log('itemsReq$ complete')
 })

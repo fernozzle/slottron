@@ -7,129 +7,104 @@ const pattern = require('./pattern')
 const rootCaptureStep = {pattern: '<*>'} // There's only 1 everything
 
 function fileWatch({fileChange$, watcher, steps}) {
-  return arrayPairwise([rootCaptureStep, ...steps]).reduce(
-    ({allChange$, stepChange$}, [prevStep, step], i) => {
-
+  return arrayPairwise([rootCaptureStep, ...steps]).reduce((
+    {allChange$, stepChange$},
+    [prevStep, step],
+    i
+  ) => {
     // First we collapse into groups...
-
-    const queryChange$ = stepChange$
+    const groupChange$ = stepChange$
+    //.debug(x => console.log('STEPCHANGE', x))
     .fold(({map}, {type, path, date = new Date()}) => {
 
       const vars = pattern.read(pattern.parse(prevStep.pattern), path)
-      const query = pattern.render(pattern.parse(step.pattern), vars)
+      const group = pattern.render(pattern.parse(step.pattern), vars)
 
       // Add/remove from buckets
-      let change = {type: null, query, path, date}
+      const change = {type: null, group, path, date}
       if (type === 'remove') {
         change.type = 'removeSource'
-        if (map.has(query)) {
-          const sources = map.get(query).set
+        if (map.has(group)) {
+          const sources = map.get(group).set
           sources.delete(path)
           if (sources.size === 0) {
-            map.delete(query) // Remove empty bucket
+            map.delete(group) // Remove empty bucket
             change.type = 'remove'
           }
         }
-      } else { // add or update
-        if (map.has(query)) {
-          const queryPaths = map.get(query).set
-          if (!queryPaths.has(path)) {
-            queryPaths.add(path) // existent bucket
-            change.type = 'addSource'
-          } else {
-            change.type = 'update' // nothing new
-          }
-        } else {
-          map.set(query, {
-            set: new Set([path]),
-            parsed: pattern.parse(query)
-          })
-          change.type = 'add' // new bucket
-        }
+      } else if (map.has(group)) { // Add or update
+        const groupPaths = map.get(group).set
+        if (!groupPaths.has(path)) {
+          groupPaths.add(path) // Existent bucket
+          change.type = 'addSource'
+        } else change.type = 'update' // Nothing new
+      } else { // New bucket
+        map.set(group, {
+          set: new Set([path]),
+          parsed: pattern.parse(group)
+        })
+        change.type = 'add'
       }
       return {map, change}
-    }, {map: new Map(), change: null}).drop(1) // Don't emit seed
+    }, {map: new Map(), change: null})
+    .filter(({change}) => change) // Don't emit seed
 
+    /**      _       _
+     *    __| | __ _| |_ ___
+     *   / _` ||__` | __/ _ \  is the ctime (changed time, for both file content and copying)
+     *  | (_| |/ _` | ||  __/     of the file if provided (all add/remove events, both search & event)
+     * (_\__,_|\__,_|\__\___|     and `Date.now()` if it's a remove event
+     */
+
+    // An entire group shares one activity entry
     // This goes to the /activity/ service, which should reject items where date <= current value
-    const activity$ = queryChange$.map((
-      {change: {query, type, path, date}}
+    const groupActivity$ = groupChange$.map((
+      {change: {group, type, path, date}}
     ) => ({
-      query, // To be used like a primary key
-      path,  // This is the file whose modification updated our query
-      date,  // Service has a hook that REJECTS if date <= latest ####### ACTUALLY NO THEY JUST ALL ACCUMULATE AND A REQUEST GETS THE LATEST ONE
+      activity: true,
+      group, // To be used like a primary key
+      path,  // This is the file whose modification updated our group
+      date,  // Entries shall accumulate and the one with the latest date
+             // determines whether a group's descendant item is outdated
       type: ( // What happened to it
         type === 'add' || type === 'addSource'
       ) ? 'add' : (type === 'update' ? 'update' : 'remove'),
     }))
 
     // ...Then we expand by searching/listening
-    listingChange$ = queryChange$.filter(
-      x => x.change.type === 'add' // A unique query appears!
-    ).fold((streamsMap, {map, change: {type, query}}) => {
-      const parsed = map.get(query).parsed
-      const remove$ = queryChange$.filter(x => (
-        x.change.type === 'remove' &&
-        x.change.query === query
+    // groupChange$ events where type === 'update' are completely IGNORED here
+    itemChange$ = groupChange$.filter(
+      x => x.change.type === 'add' // A unique group appears!
+    ).fold((streamsMap, {map, change: {type, group}}) => {
+      const parsed = map.get(group).parsed
+      const groupRemove$ = groupChange$.filter(x => (
+        x.change.type === 'remove' && x.change.group === group
       )).take(1)
-
-
-      // What to do: write an 'expect' function
-      //
-
-      const isSmart = (parsed.varNames.length > 0)
-      /*
-      const queryEvent$ = collection({
-        // If live query results are empty, pretend
+      return streamsMap.set(group, collectGroupEvents({
+        // If live group results are empty, pretend
         // there's 1 fake file there with this name
         fallbackName: pattern.renderDummy(parsed),
-        change$: xs.merge(
-          xs.from(querySearch(parsed, watcher)) // Synchronous
-            .map(path => ({type: 'add', path})),
-          fileChange$.filter(queryMatches(parsed)) // Live
-        )
-      })
-      */
-
-      const queryEvent$ = isSmart
-        // Branch. This query is but a portal to whatever files exist
-        ? trackCollection({query, parsed, remove$, change$: xs.merge(
-          xs.from(querySearch(parsed, watcher))
-            .map(path => ({type: 'add', path})),
-          fileChange$.filter(queryMatches(parsed))
-        )}).map(x => {x.query = query; return x})
-        // No branching. This query IS the file!
-        : xs.merge( // Always exists; realness only changes a property
-          xs.of({type: 'add', path: query, query, isReal:
-            querySearch(parsed, watcher).length > 0}),
-          fileChange$.filter(queryMatches(parsed))
-            .map(({type, path}) => ({ // real / imaginary
-              type: 'update', path: query, query,
-              isReal: type === 'add' || type === 'update'
-            }))
-            .endWhen(remove$),
-          remove$.mapTo({type: 'remove', path: query})
-        )
-      return streamsMap.set(query, queryEvent$)
+        filesInitial: groupSearch(parsed, watcher),
+        fileChange$: fileChange$.filter(groupMatches(parsed)),
+        groupRemove$
+      }).map(change => Object.assign(change, {group, step: i})))
     }, new Map())
     .compose(gather)
 
     return {
-      allChange$: xs.merge(
-        allChange$,
-        activity$,
-        listingChange$.map(x => {x.step = i; return x})
-      ),
-      stepChange$: listingChange$
+      allChange$: xs.merge(allChange$, groupActivity$, itemChange$),
+      stepChange$: itemChange$
     }
   }, {
-      allChange$: xs.never(),
-      stepChange$: xs.merge(
-        xs.of({type: 'add', path: './', query: rootCaptureStep.pattern}), xs.never()
-      )
+    allChange$: xs.never(),
+    stepChange$: xs.merge(xs.never(), xs.of({
+      type: 'add', path: './',
+      group: rootCaptureStep.pattern
+    }))
   }).allChange$
 }
 
-function queryMatches(parsedPattern) {
+function groupMatches(parsedPattern) {
   return change => {
     try {
       pattern.read(parsedPattern, change.path)
@@ -138,7 +113,7 @@ function queryMatches(parsedPattern) {
     return false
   }
 }
-function querySearch(parsedPattern, watcher) {
+function groupSearch(parsedPattern, watcher) {
   const listings = Object.entries(watcher.getWatched())
   const matchingPaths = []
   for (const [dir, files] of listings) {
@@ -151,43 +126,38 @@ function querySearch(parsedPattern, watcher) {
     }
   }
   return matchingPaths
-  //return xs.from(matchingPaths).map(path => ({type: 'add', path}))
 }
 
-function trackCollection({parsed, change$, remove$}) {
-  const dummyMap = new Map([[pattern.renderDummy(parsed), false]])
-  const pathIsRealMap$ = change$.fold((paths, {type, path, date}) => {
+function collectGroupEvents({fallbackName, filesInitial, fileChange$, groupRemove$}) {
+  const dummyMap = new Map([[fallbackName, {isReal: false, date: null}]])
+  const initialMap = new Map(filesInitial.map(path =>
+    [path, {isReal: true, date: new Date(0)}] // REPLACE WITH FILE CREATION DATE
+  ))
+  const map$ = fileChange$.fold((paths, {type, path}) => {
     const map = new Map(paths)
-    if (type === 'remove') {
-      map.delete(path)
-    } else { // add or update
-      map.set(path, {isReal: true, date: true})
-    }
+    if (type === 'remove') map.delete(path)
+    else map.set(path, {isReal: true, date: new Date()}) // I guess we're using realtime timestamps
     return map
-  }, new Map())
+  }, initialMap)
 
-  const stream$ = xs.merge(
-    pathIsRealMap$.endWhen(remove$), remove$.mapTo(null)
+  return xs.merge(
+    map$.endWhen(groupRemove$), groupRemove$.mapTo(null)
   ).startWith(null)
   .map(map => map ? (map.size ? map : dummyMap) : new Map())
-
-  // Handling the dummySet requires summing up the changes
   .compose(pairwise)
-  .map(([pathsOld, pathsNew]) => {
-    const paths = new Map(pathsOld)
+  .map(([mapOld, mapNew]) => {
+    const map = new Map(mapOld)
     const emit = []
-    for (const [path, {isReal, date}] of pathsNew) {
-      if (paths.has(path)) {
-        paths.delete(path)
-        if (date < paths.get(path)) continue
-        emit.push({type: 'update', path, isReal})
-      } else emit.push({type: 'add', path, isReal})
+    for (const [path, item] of mapNew) { // Date unused right now
+      if (map.has(path)) { // Both old and new have it...
+        if (item !== map.get(path)) //..but it's DIFFERENT (by value)
+          emit.push(Object.assign({type: 'update', path}, item))
+        map.delete(path)
+      } else emit.push(Object.assign({type: 'add', path}, item))
     }
-    paths.forEach(path => emit.push({type: 'remove', path}))
-    //emit.push(null)
+    map.forEach((item, path) => emit.push({type: 'remove', path}))
     return xs.from(emit)
   }).flatten()
-  return stream$
 }
 
 function arrayPairwise(array) {
@@ -205,7 +175,7 @@ function gather(streamsMap$) {
   streamsMap$.addListener({
     next: streamsMap => {
       const streamsOld = new Map(streams)
-      for (const [query, stream] of streamsMap) {
+      for (const [group, stream] of streamsMap) {
         if (streamsOld.has(stream)) {
           streamsOld.delete(stream)
         } else streams.set(stream, stream.subscribe(sub))
