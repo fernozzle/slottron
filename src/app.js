@@ -88,8 +88,8 @@ const watcher = chokidar.watch('.', {
 })
 const fileChange$ = xs.create({
   start: l => watcher
-    .on('add', (path, {size, mtime}) => l.next({type: 'add', path, size, date: mtime}))
-    .on('change', (path, {size, mtime}) => l.next({type: 'update', path, size, date: mtime}))
+    .on('add', (path, {size, ctime: date}) => l.next({type: 'add', path, size, date}))
+    .on('change', (path, {size, ctime: date}) => l.next({type: 'update', path, size, date}))
     .on('unlink', path => l.next({type: 'remove', path})),
   stop: () => {}
 })

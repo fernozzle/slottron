@@ -1,12 +1,23 @@
 const pathModule = require('path')
 const xs = require('xstream').default
 const pairwise = require('xstream/extra/pairwise').default
+const sampleCombine = require('xstream/extra/sampleCombine').default
 
 const pattern = require('./pattern')
 
 const rootCaptureStep = {pattern: '<*>'} // There's only 1 everything
 
 function fileWatch({fileChange$, watcher, steps}) {
+
+  // Wish we didn't need this. It's to save the data from the `stat`
+  // parameter in events so we can use it later with groupSearch
+  const statCache$ = fileChange$.fold((cache, change) => {
+    const {type, path, size, date} = change
+    if (type === 'remove') cache.delete(path)
+    else cache.set(path, {size, date})
+    return cache
+  }, new Map())
+
   return arrayPairwise([rootCaptureStep, ...steps]).reduce((
     {allChange$, stepChange$},
     [prevStep, step],
@@ -14,7 +25,6 @@ function fileWatch({fileChange$, watcher, steps}) {
   ) => {
     // First we collapse into groups...
     const groupChange$ = stepChange$
-    //.debug(x => console.log('STEPCHANGE', x))
     .fold(({map}, {type, path, date = new Date()}) => {
 
       const vars = pattern.read(pattern.parse(prevStep.pattern), path)
@@ -75,7 +85,8 @@ function fileWatch({fileChange$, watcher, steps}) {
     // groupChange$ events where type === 'update' are completely IGNORED here
     itemChange$ = groupChange$.filter(
       x => x.change.type === 'add' // A unique group appears!
-    ).fold((streamsMap, {map, change: {type, group}}) => {
+    ).compose(sampleCombine(statCache$))
+    .fold((streamsMap, [{map, change: {type, group}}, statCache]) => {
       const parsed = map.get(group).parsed
       const groupRemove$ = groupChange$.filter(x => (
         x.change.type === 'remove' && x.change.group === group
@@ -84,10 +95,10 @@ function fileWatch({fileChange$, watcher, steps}) {
         // If live group results are empty, pretend
         // there's 1 fake file there with this name
         fallbackName: pattern.renderDummy(parsed),
-        filesInitial: groupSearch(parsed, watcher),
+        filesInitial: groupSearch(parsed, watcher, statCache),
         fileChange$: fileChange$.filter(groupMatches(parsed)),
         groupRemove$
-      }).map(change => Object.assign(change, {group, step: i})))
+      }).map(change => ({...change, group, step: i})))
     }, new Map())
     .compose(gather)
 
@@ -113,15 +124,15 @@ function groupMatches(parsedPattern) {
     return false
   }
 }
-function groupSearch(parsedPattern, watcher) {
+function groupSearch(parsedPattern, watcher, statCache) {
   const listings = Object.entries(watcher.getWatched())
-  const matchingPaths = []
+  const matchingPaths = new Map()
   for (const [dir, files] of listings) {
     for (const file of files) {
       const path = pathModule.join(dir, file)
       try {
         pattern.read(parsedPattern, path)
-        matchingPaths.push(path)
+        matchingPaths.set(path, statCache.get(path))
       } catch (e) {}
     }
   }
@@ -129,14 +140,17 @@ function groupSearch(parsedPattern, watcher) {
 }
 
 function collectGroupEvents({fallbackName, filesInitial, fileChange$, groupRemove$}) {
-  const dummyMap = new Map([[fallbackName, {isReal: false, date: null}]])
-  const initialMap = new Map(filesInitial.map(path =>
-    [path, {isReal: true, date: new Date(0)}] // REPLACE WITH FILE CREATION DATE
+  const dummyMap = new Map([
+    [fallbackName, {isReal: false, date: null}]
+    // .date is NULL! THAT'S IMPORTANT! IT'LL NEVER GO OUT OF DATE!
+  ])
+  const initialMap = new Map([...filesInitial.entries()].map(
+    ([path, {size, date}]) => [path, {isReal: true, date}]
   ))
-  const map$ = fileChange$.fold((paths, {type, path}) => {
+  const map$ = fileChange$.fold((paths, {type, path, date}) => {
     const map = new Map(paths)
     if (type === 'remove') map.delete(path)
-    else map.set(path, {isReal: true, date: new Date()}) // I guess we're using realtime timestamps
+    else map.set(path, {isReal: true, date})
     return map
   }, initialMap)
 
@@ -151,11 +165,13 @@ function collectGroupEvents({fallbackName, filesInitial, fileChange$, groupRemov
     for (const [path, item] of mapNew) { // Date unused right now
       if (map.has(path)) { // Both old and new have it...
         if (item !== map.get(path)) //..but it's DIFFERENT (by value)
-          emit.push(Object.assign({type: 'update', path}, item))
+          emit.push({type: 'update', path, ...item})
         map.delete(path)
-      } else emit.push(Object.assign({type: 'add', path}, item))
+      } else emit.push({type: 'add', path, ...item})
     }
-    map.forEach((item, path) => emit.push({type: 'remove', path}))
+    for (const [path, item] of map) { // Removals don't use file's ctime :+(
+      emit.push({type: 'remove', path, date: new Date()})
+    }
     return xs.from(emit)
   }).flatten()
 }
