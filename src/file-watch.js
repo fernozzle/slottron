@@ -60,8 +60,8 @@ function fileWatch({fileChange$, watcher, steps}) {
     .filter(({change}) => change) // Don't emit seed
 
     /**      _       _
-     *    __| | __ _| |_ ___
-     *   / _` ||__` | __/ _ \  is the ctime (changed time, for both file content and copying)
+     *    __| | ___ | |_ ___
+     *   / _` ||__ \| __/ _ \  is the ctime (changed time, for both file content and copying)
      *  | (_| |/ _` | ||  __/     of the file if provided (all add/remove events, both search & event)
      * (_\__,_|\__,_|\__\___|     and `Date.now()` if it's a remove event
      */
@@ -189,7 +189,7 @@ function gather(streamsMap$) {
   }
   const streams = new Map()
   streamsMap$.addListener({
-    next: streamsMap => {
+    next(streamsMap) {
       const streamsOld = new Map(streams)
       for (const [group, stream] of streamsMap) {
         if (streamsOld.has(stream)) {
@@ -203,14 +203,14 @@ function gather(streamsMap$) {
     }
   })
   return xs.create({
-    start: listener => {
+    start(listener) {
       if (!l) itemBuffer.forEach(({item, error}) => {
         if (item) listener.next(item)
         if (error) listener.error(error)
       })
       l = listener
     },
-    stop: () => {
+    stop() {
       l = null
       itemBuffer.splice(0, itemBuffer.length)
     }
