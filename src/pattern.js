@@ -32,16 +32,18 @@ pattern.read = function({fixedParts, varNames}, path) {
   for (let i = 0; i < varNames.length; i++) {
 
     // search from the end if next fixedPart is the last
+    const next = fixedParts[i + 1]
     let varEnd = (i + 1 === fixedParts.length - 1)
-      ? path.lastIndexOf(fixedParts[i + 1])
-      : path.indexOf    (fixedParts[i + 1], index)
-    if (varEnd <= index) throw `Fixed part "${fixedParts[i + 1]}" unfound or behind us, with value ${varEnd}`
+      ? path.lastIndexOf(next)
+      : path.indexOf    (next, index)
+    if (varEnd <= index) throw `Fixed part "${next}" unfound or behind us, with value ${varEnd}`
     if (varNames[i] !== '*') { // {*} means 'throw it away'
       dict[varNames[i]] = path.substring(index, varEnd)
     }
     // skip over the fixedPart, which we know matches up
-    index = varEnd + fixedParts[i + 1].length
+    index = varEnd + next.length
   }
+  if (index !== path.length) throw `Path matches but has extra characters on the end`
 
   return dict
 }
