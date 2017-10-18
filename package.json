@@ -28,9 +28,9 @@
     "mocha": "mocha test/ --recursive"
   },
   "dependencies": {
-    "@cycle/collection": "^0.6.0",
     "@cycle/dom": "^18.3.0",
     "@cycle/history": "^6.4.0",
+    "@cycle/isolate": "^3.1.0",
     "@cycle/run": "^3.3.0",
     "@types/history": "^4.6.1",
     "body-parser": "^1.18.2",

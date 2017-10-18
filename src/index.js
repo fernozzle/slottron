@@ -38,8 +38,11 @@ const compiler = webpack({
   },
   plugins: [new ProgressBarPlugin()],
   module: {rules: [{
-    test: /\.tsx?$/,
-    use: 'ts-loader',
+    test: /\.[tj]sx?$/,
+    use: {
+      loader: 'ts-loader',
+      options: {entryFileIsJs: true}
+    },
     exclude: /node_modules/
   }]}
 }, (err, stats) => {

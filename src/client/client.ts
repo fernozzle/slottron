@@ -1,6 +1,6 @@
 import {run} from '@cycle/run'
 import {makeDOMDriver, div, input, DOMSource} from '@cycle/dom'
-const Collection = require('@cycle/collection').default
+const Collection = require('./collection').default
 import xs from 'xstream'
 import sampleCombine from 'xstream/extra/sampleCombine'
 
