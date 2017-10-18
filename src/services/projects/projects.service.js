@@ -5,10 +5,15 @@ const createService = require('feathers-nedb');
 const createModel = require('../../models/projects.model');
 const filters = require('./projects.filters');
 
+const {setCreatedAt} = require('feathers-hooks-common');
+
 module.exports = function () {
   const app = this;
   const Model = createModel(app);
-  const paginate = app.get('paginate');
+  const paginate = {
+    default: Number.POSITIVE_INFINITY,
+    max: Number.POSITIVE_INFINITY
+  }
 
   const options = {
     name: 'projects',
@@ -26,7 +31,7 @@ module.exports = function () {
       all: [],
       find: [],
       get: [],
-      create: [excludeByPath, makeFile],
+      create: [excludeByPath, setCreatedAt('dateAdded')],
       update: [],
       patch: [],
       remove: []

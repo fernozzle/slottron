@@ -1,7 +1,8 @@
 import {run} from '@cycle/run'
-import {makeDOMDriver, div} from '@cycle/dom'
+import {makeDOMDriver, div, input, DOMSource} from '@cycle/dom'
 const Collection = require('@cycle/collection').default
 import xs from 'xstream'
+import sampleCombine from 'xstream/extra/sampleCombine'
 
 import {routerify} from 'cyclic-router'
 import {makeHashHistoryDriver} from '@cycle/history'
@@ -22,7 +23,7 @@ function ListingItem(sources: {datum: any, removeAll$: xs<{}>, updateAll$: xs<{}
 }
 
 function main(sources : any) {
-  const {DOM, Feathers} = sources
+  const {DOM, Feathers}: {DOM: DOMSource, Feathers: any} = sources
 
   const match$ = sources.router.define({
     '/': 'home sweet home',
@@ -53,16 +54,58 @@ function main(sources : any) {
   })
   const listItemDOMs$ = Collection.pluck(listItems$, (item: any) => item.DOM)
 
-  const vtree$ = listItemDOMs$.map((vtrees: any) => div(vtrees))
+  Feathers.response({service: 'projects/', method: 'find'})
+  .flatten().map((x: any) => x.data)
+  .addListener({
+    next(x: any) { console.log('projects', x) }
+  })
+
+  const vtree$ = listItemDOMs$.map((vtrees: any) => div(
+    [
+      div([
+        input('.proj-path', {attrs: {placeholder: 'Path'}}),
+        input('.proj-add', {attrs: {type: 'button', value: 'Add project'}}),
+        input('.proj-clear', {attrs: {type: 'button', value: 'Clear projects'}})
+      ]),
+      div(vtrees)
+    ]
+  ))
+
+  const input$ = DOM.select('.proj-path').events('keyup')
+    .map(ev => ev.target['value'])
+  const addProject$ = DOM.select('.proj-add').events('click')
+    .compose(sampleCombine(input$))
+    .map(([click, path]) => ({
+      service: 'projects/',
+      method: 'create',
+      data: {path}
+    }))
+  const clearProject$ = DOM.select('.proj-clear').events('click')
+    .mapTo({
+      service: 'projects/',
+      method: 'remove',
+      id: null,
+      params: {query: null}
+    })
 
   return {
     DOM: vtree$,
     router: xs.never(),
-    Feathers: xs.of({
-      service: 'items/',
-      method: 'find',
-      extra: 'HELLO IT IS ME'
-    })
+    Feathers: xs.merge(
+      addProject$,
+      clearProject$,
+      xs.of(
+        {
+          service: 'items/',
+          method: 'find',
+          extra: 'HELLO IT IS ME'
+        } as any,
+        {
+          service: 'projects/',
+          method: 'find'
+        }
+      )
+    )
   }
 }
 
