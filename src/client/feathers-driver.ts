@@ -5,7 +5,7 @@ const feathers = require('feathers/client')
 const socketio = require('feathers-socketio/client')
 
 
-interface FeathersRequest {
+export interface FeathersRequest {
   service: string,
   method: string,
   id?: string,
@@ -13,7 +13,7 @@ interface FeathersRequest {
   params?: any,
   category?: any
 }
-export type RequestStream = xs<any> & {request: any}
+export type FeathersRequestStream = xs<any> & {request: FeathersRequest}
 
 export default function makeFeathersDriver(socketURL: string) {
   return function feathersDriver(request$: xs<any>) {
@@ -26,7 +26,7 @@ export default function makeFeathersDriver(socketURL: string) {
 
     let unsub = null as Subscription
 
-    const response$ = xs.create<{category: any, stream: RequestStream}>({
+    const response$ = xs.create<FeathersRequestStream>({
       start(listener) {
         unsub = request$.subscribe({
           next(request: FeathersRequest) {
@@ -38,11 +38,11 @@ export default function makeFeathersDriver(socketURL: string) {
 
             const stream = xs.fromPromise(service[method].apply(service,
               [id, data, params].filter(x => x !== undefined)
-            )) as RequestStream
+            )) as FeathersRequestStream
             stream.request = request
             // A bit of a hack here. If you use the same
             // params as the docs, it'll be fine, okay
-            listener.next({ category, stream })
+            listener.next(stream)
 
             const projects = client.service('/projects')
           },
@@ -52,9 +52,10 @@ export default function makeFeathersDriver(socketURL: string) {
       },
       stop() { if (unsub) unsub.unsubscribe() }
     })
+    response$.addListener({})
 
-    return {select(key = '*') {
-      return response$.filter(x => key === '*' || key === x.category)
+    return {select(key = '*'): xs<FeathersRequestStream> {
+      return response$.filter(x => key === '*' || key === x.request.category)
     }}
   }
 }

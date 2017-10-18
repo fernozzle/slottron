@@ -32,7 +32,10 @@ const compiler = webpack({
     path: path.join(__dirname, '../public'),
     filename: '[name].bundle.js'
   },
-  resolve: {modules: ['node_modules']},
+  resolve: {
+    extensions: ['.ts', '.js'],
+    modules: ['node_modules']
+  },
   plugins: [new ProgressBarPlugin()],
   module: {rules: [{
     test: /\.tsx?$/,

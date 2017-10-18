@@ -2,7 +2,7 @@ import {run} from '@cycle/run'
 import {makeDOMDriver, div} from '@cycle/dom'
 import xs from 'xstream'
 
-import makeFeathersDriver from './feathers-driver'
+import {default as makeFeathersDriver, FeathersRequestStream} from './feathers-driver'
 
 
 /*
@@ -33,11 +33,28 @@ const drivers = {
 }
 
 run(function App(sources : any) {
+  const {DOM, Feathers} = sources
+  Feathers.select('*').addListener({
+    next: (result$: FeathersRequestStream) => {
+      console.log('NEW FEATHERS REQUEST!', result$)
+      result$.addListener({
+        next: result => {
+          console.log(`result to ${result$.request.category}:`, result)
+        }
+      })
+    }
+  })
+
   const vtree$ = xs.of(
     div('My Awesome Cycle.js app')
   )
 
   return {
-    DOM: vtree$
+    DOM: vtree$,
+    Feathers: xs.of({
+      service: 'items/',
+      method: 'find',
+      category: 'HELLO IT IS ME'
+    })
   }
 }, drivers)

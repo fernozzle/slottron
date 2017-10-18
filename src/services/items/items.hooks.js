@@ -13,6 +13,10 @@ module.exports = {
 
   after: {
     all: [],
+
+    find: [],
+    get: [],
+    /*
     find: [hook => {
       if (hook.params.isInternal) return hook
       return Promise.all(hook.result.data.map(result => getSourcesFor(
@@ -25,6 +29,8 @@ module.exports = {
         hook.app.get('SL-steps'), hook.service, hook.result
       ).then(result => hook)
     }],
+    */
+
     create: [],
     update: [],
     patch: [],
