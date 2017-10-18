@@ -30,7 +30,7 @@ module.exports = function() {
 
   function doFileNotFound(res, path) {
     res.status(404)
-    res.send(`No file, real or imaginary, exists at '${filePath}'.`)
+    res.send(`No file, real or imaginary, exists at '${path}'.`)
   }
   function doy (root, filePath, res) {
     const stream = fs.createReadStream(path.join(root, filePath))
@@ -45,7 +45,7 @@ module.exports = function() {
       app.service('items').find({query: {path: filePath}})
       .then(({data: [result]}) => {
         if (result) res.send(result.sources)
-        doFileNotFound(res, filePath)
+        else doFileNotFound(res, filePath)
       })
     })
     stream.pipe(res)

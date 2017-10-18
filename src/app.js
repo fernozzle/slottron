@@ -61,7 +61,6 @@ module.exports = app;
  * my turn binch
  */
 
-const find = require('find')
 const fs = require('fs')
 const chokidar = require('chokidar')
 const xs = require('xstream').default

@@ -23,12 +23,11 @@ const path = require('path')
 const ProgressBarPlugin =
   require('progress-bar-webpack-plugin')
 
-/*
 const compiler = webpack({
   watch: true,
   cache: true,
   context: __dirname,
-  entry: {client: './client.ts'},
+  entry: {client: './client/client.ts'},
   output: {
     path: path.join(__dirname, '../public'),
     filename: '[name].bundle.js'
