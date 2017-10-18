@@ -10,15 +10,11 @@ const {setCreatedAt} = require('feathers-hooks-common');
 module.exports = function () {
   const app = this;
   const Model = createModel(app);
-  const paginate = {
-    default: Number.POSITIVE_INFINITY,
-    max: Number.POSITIVE_INFINITY
-  }
 
   const options = {
     name: 'projects',
     Model,
-    paginate
+    paginate: app.get('paginate')
   };
 
   // Initialize our service with any options it requires

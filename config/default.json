@@ -3,10 +3,13 @@
   "port": 3030,
   "public": "../public/",
   "paginate": {
-    "default": 10,
-    "max": 50
+    "default": 1e999,
+    "max": 1e999
   },
   "nedb": "../data",
 
-  "defaultDir": "../workspace"
+  "defaultDir": "../workspace",
+
+  "zomby": "toot",
+  "SL-root": "./myProjjie"
 }
