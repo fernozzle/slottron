@@ -1,4 +1,4 @@
-import {default as xs, Subscription} from 'xstream'
+import {default as xs, Subscription, Listener} from 'xstream'
 
 const io = require('socket.io-client')
 const feathers = require('feathers/client')
@@ -11,7 +11,7 @@ export interface FeathersRequest {
   id?: string,
   data?: any,
   params?: any,
-  category?: any
+  extra?: any
 }
 export type FeathersRequestStream = xs<any> & {request: FeathersRequest}
 
@@ -26,16 +26,22 @@ export function makeFeathersDriver(socketURL: string) {
 
     let unsub = null as Subscription
 
+    function getService(name: string) {
+      let service = services.get(name)
+      if (!service) {
+        service = client.service(name)
+        services.set(name, service)
+      }
+      return service
+    }
+
     const response$ = xs.create<FeathersRequestStream>({
       start(listener) {
         unsub = request$.subscribe({
           next(request: FeathersRequest) {
-            const {service: name, method, id, data, params, category} = request
+            const {service: name, method, id, data, params, extra} = request
 
-            if (!services.has(name))
-              services.set(name, client.service(name))
-            const service = services.get(name)
-
+            const service = getService(name)
             const stream = xs.fromPromise(service[method].apply(service,
               [id, data, params].filter(x => x !== undefined)
             )) as FeathersRequestStream
@@ -54,8 +60,28 @@ export function makeFeathersDriver(socketURL: string) {
     })
     response$.addListener({})
 
-    return {select(key = '*'): xs<FeathersRequestStream> {
-      return response$.filter(x => key === '*' || key === x.request.category)
-    }}
+    return {
+      listen({service: name, type}: {service: string, type: string}) {
+        console.log('tryna listen to service', name, 'and type', type)
+        const service = getService(name)
+        let cb = null as any
+
+        return xs.create<any>({
+          start(listener) {
+            cb = (x: any) => listener.next(x)
+            service.on(type, cb)
+          },
+          stop() {
+            service.removeListener(type, cb)
+          }
+        })
+      },
+      response(matchParams: {} = {}): xs<FeathersRequestStream> {
+        const keys = Object.keys(matchParams)
+        return response$.filter(({request}) =>
+          keys.every(key => matchParams[key] === request[key])
+        )
+      }
+    }
   }
 }

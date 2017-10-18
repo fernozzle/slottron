@@ -34,12 +34,19 @@ const drivers = {
 
 run(function App(sources : any) {
   const {DOM, Feathers} = sources
-  Feathers.select('*').addListener({
+
+  Feathers.listen({service: 'items/', type: 'created'}).addListener({
+    next: (x: any) => {
+      console.log('LISTEN', x)
+    }
+  })
+
+  Feathers.response({}).addListener({
     next: (result$: FeathersRequestStream) => {
       console.log('NEW FEATHERS REQUEST!', result$)
       result$.addListener({
         next: result => {
-          console.log(`result to ${result$.request.category}:`, result)
+          console.log(`result to ${result$.request.extra}:`, result)
         }
       })
     }
@@ -54,7 +61,7 @@ run(function App(sources : any) {
     Feathers: xs.of({
       service: 'items/',
       method: 'find',
-      category: 'HELLO IT IS ME'
+      extra: 'HELLO IT IS ME'
     })
   }
 }, drivers)
