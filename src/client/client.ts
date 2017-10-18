@@ -1,31 +1,21 @@
 import {run} from '@cycle/run'
 import {makeDOMDriver, div} from '@cycle/dom'
+const Collection = require('@cycle/collection').default
 import xs from 'xstream'
 
 import {makeFeathersDriver, FeathersRequestStream} from './feathers-driver'
 
+function ListingItem(sources: {datum: any, removeAll$: xs<{}>, updateAll$: xs<{}>}) {
+  const isOurs = (x: any) => x.path === sources.datum.path
 
-/*
-// Fetch entries
-projects.find().then((results:any) => {
-  console.log('Projects:', results)
-})
-
-// Listen for events
-projects.on('created', (datum: any) => {
-  console.log('Project added:', datum)
-})
-
-// Create entries
-const button = document.querySelector('#new-project')
-const name = document.querySelector('#name') as HTMLInputElement
-button.addEventListener('click', () => {
-  projects.create({
-    path: `./${name.value}`,
-  })
-})
-
-*/
+  const datum$ = sources.updateAll$.filter(isOurs).startWith(sources.datum)
+  return {
+    DOM: datum$.map((datum: any) =>
+      div(`What is popping, James? ` + JSON.stringify(datum))
+    ).remember(),
+    remove$: sources.removeAll$.filter(isOurs)
+  }
+}
 
 const drivers = {
   DOM: makeDOMDriver('#main'),
@@ -35,26 +25,22 @@ const drivers = {
 run(function App(sources : any) {
   const {DOM, Feathers} = sources
 
-  Feathers.listen({service: 'items/', type: 'created'}).addListener({
-    next: (x: any) => {
-      console.log('LISTEN', x)
-    }
-  })
+  const add$ = xs.merge(
+    Feathers.response({service: 'items/', method: 'find'})
+      .flatten() // Flatten xs<Promise>
+      .map(({data}: {data: any}) => xs.fromArray(data || []))
+      .flatten(), // Flatten xs<Item[]> into xs<Item>
+    Feathers.listen({service: 'items/', type: 'created'})
+  ).map((datum: any) => ({datum}))
 
-  Feathers.response({}).addListener({
-    next: (result$: FeathersRequestStream) => {
-      console.log('NEW FEATHERS REQUEST!', result$)
-      result$.addListener({
-        next: result => {
-          console.log(`result to ${result$.request.extra}:`, result)
-        }
-      })
-    }
+  const removeAll$ = Feathers.listen({service: 'items/', type: 'removed'})
+  const updateAll$ = Feathers.listen({service: 'items/', type: 'patched'})
+  const listItems$ = Collection(ListingItem, {removeAll$, updateAll$}, add$, (item: any) => {
+    return item.remove$
   })
+  const listItemDOMs$ = Collection.pluck(listItems$, (item: any) => item.DOM)
 
-  const vtree$ = xs.of(
-    div('My Awesome Cycle.js app')
-  )
+  const vtree$ = listItemDOMs$.map((vtrees: any) => div(vtrees))
 
   return {
     DOM: vtree$,

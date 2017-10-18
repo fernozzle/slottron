@@ -62,7 +62,6 @@ export function makeFeathersDriver(socketURL: string) {
 
     return {
       listen({service: name, type}: {service: string, type: string}) {
-        console.log('tryna listen to service', name, 'and type', type)
         const service = getService(name)
         let cb = null as any
 

@@ -105,6 +105,8 @@ itemsReq$.addListener({
     console.log('/items/', {type, path, isReal, group})
     if (type === 'add') {
       items.create({step, path, isReal, group})
+    } else if (type === 'update') {
+      items.patch(null, {step, path, isReal, group}, {query: {path}})
     } else if (type === 'remove') {
       items.remove(null, {query: {path}})
     }

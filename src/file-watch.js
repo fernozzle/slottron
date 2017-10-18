@@ -172,7 +172,7 @@ function collectGroupEvents({fallbackName, filesInitial, fileChange$, groupRemov
     for (const [path, item] of map) { // Removals don't use file's ctime :+(
       emit.push({type: 'remove', path, date: new Date()})
     }
-    return xs.from(emit)
+    return xs.fromArray(emit)
   }).flatten()
 }
 
