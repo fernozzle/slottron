@@ -11,7 +11,7 @@ function ListingItem(sources: {datum: any, removeAll$: xs<{}>, updateAll$: xs<{}
   const datum$ = sources.updateAll$.filter(isOurs).startWith(sources.datum)
   return {
     DOM: datum$.map((datum: any) =>
-      div(`What is popping, James? ` + JSON.stringify(datum))
+      div('.item', {class: {'fake': !datum.isReal}}, `What is popping, James? ` + JSON.stringify(datum))
     ).remember(),
     remove$: sources.removeAll$.filter(isOurs)
   }
