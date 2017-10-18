@@ -15,7 +15,7 @@ export interface FeathersRequest {
 }
 export type FeathersRequestStream = xs<any> & {request: FeathersRequest}
 
-export default function makeFeathersDriver(socketURL: string) {
+export function makeFeathersDriver(socketURL: string) {
   return function feathersDriver(request$: xs<any>) {
 
     const socket = io(socketURL)

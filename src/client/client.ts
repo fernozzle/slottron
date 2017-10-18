@@ -2,7 +2,7 @@ import {run} from '@cycle/run'
 import {makeDOMDriver, div} from '@cycle/dom'
 import xs from 'xstream'
 
-import {default as makeFeathersDriver, FeathersRequestStream} from './feathers-driver'
+import {makeFeathersDriver, FeathersRequestStream} from './feathers-driver'
 
 
 /*
