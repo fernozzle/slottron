@@ -15,8 +15,8 @@ function id () {
   return _id++;
 }
 
-function makeItem (component, sources) {
-  const newId = id();
+function makeItem (component, idSelector, sources) {
+  const newId = idSelector(sources) || id();
 
   const newItem = isolate(component, newId.toString())(sources);
 
@@ -27,36 +27,37 @@ function makeItem (component, sources) {
 }
 
 function makeCollection () {
-  function collection (options, items = []) {
-    const { component, sources, removeSelector } = options;
+  function collection (options, items = new Map()) {
+    const { component, sources, removeSelector, idSelector } = options;
 
     return {
       add (additionalSources = {}) {
-        const newItem = makeItem(component, {...sources, ...additionalSources});
+        const newItem = makeItem(component, idSelector, {...sources, ...additionalSources});
         const selectedSink = removeSelector(newItem) || xs.empty();
         const removeSink = xs.fromObservable(selectedSink);
         newItem._remove$ = removeSink.take(1).mapTo(newItem);
 
+        const existentItem = items.get(newItem._id)
+
         return collection(
           options,
-          [...items, newItem]
+          new Map(items).set(newItem._id, newItem)
         );
       },
 
       remove (itemForRemoval) {
-        return collection(
-          options,
-          items.filter(item => item !== itemForRemoval)
-        );
+        const newItems = new Map(items);
+        newItems.delete(itemForRemoval._id);
+        return collection(options, newItems);
       },
 
       asArray () {
-        return items.slice(); // returns a copy of items to avoid mutation
+        return [...items.values()]; // returns a copy of items to avoid mutation
       }
     };
   }
 
-  function Collection (component, sources = {}, sourceAdd$ = xs.empty(), removeSelector = noop) {
+  function Collection (component, sources = {}, sourceAdd$ = xs.empty(), removeSelector = noop, idSelector = noop) {
     const removeProxy$ = xs.create();
     const add$ = xs.fromObservable(sourceAdd$);
     const addReducer$ = add$.map(sourcesList => collection => {
@@ -71,7 +72,7 @@ function makeCollection () {
     const removeReducer$ = removeProxy$.map(item => collection => collection.remove(item));
     const reducer$ = xs.merge(removeReducer$, addReducer$);
 
-    const emptyCollection = collection({ component, sources, removeSelector });
+    const emptyCollection = collection({ component, sources, removeSelector, idSelector });
     const collection$ = reducer$
       .fold((collection, reducer) => reducer(collection), emptyCollection)
       .map(collection => collection.asArray());

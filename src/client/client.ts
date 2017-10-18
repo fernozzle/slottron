@@ -49,9 +49,10 @@ function main(sources : any) {
 
   const removeAll$ = Feathers.listen({service: 'items/', type: 'removed'})
   const updateAll$ = Feathers.listen({service: 'items/', type: 'patched'})
-  const listItems$ = Collection(ListingItem, {removeAll$, updateAll$}, add$, (item: any) => {
-    return item.remove$
-  })
+  const listItems$ = Collection(ListingItem, {removeAll$, updateAll$}, add$,
+    (item: any) => item.remove$,
+    (sources: any) => console.log('id selector', sources.datum)
+  )
   const listItemDOMs$ = Collection.pluck(listItems$, (item: any) => item.DOM)
 
   Feathers.response({service: 'projects/', method: 'find'})
