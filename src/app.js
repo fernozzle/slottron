@@ -65,7 +65,6 @@ const fs = require('fs')
 const chokidar = require('chokidar')
 const xs = require('xstream').default
 const delay = require('xstream/extra/delay').default
-
 const fileWatch = require('./file-watch').default
 
 const items = app.service('/items')

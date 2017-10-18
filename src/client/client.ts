@@ -3,6 +3,10 @@ import {makeDOMDriver, div} from '@cycle/dom'
 const Collection = require('@cycle/collection').default
 import xs from 'xstream'
 
+import {routerify} from 'cyclic-router'
+import {makeHashHistoryDriver} from '@cycle/history'
+import switchPath from 'switch-path'
+
 import {makeFeathersDriver, FeathersRequestStream} from './feathers-driver'
 
 function ListingItem(sources: {datum: any, removeAll$: xs<{}>, updateAll$: xs<{}>}) {
@@ -17,13 +21,22 @@ function ListingItem(sources: {datum: any, removeAll$: xs<{}>, updateAll$: xs<{}
   }
 }
 
-const drivers = {
-  DOM: makeDOMDriver('#main'),
-  Feathers: makeFeathersDriver('http://localhost:3030')
-}
-
-run(function App(sources : any) {
+function main(sources : any) {
   const {DOM, Feathers} = sources
+
+  const match$ = sources.router.define({
+    '/': 'home sweet home',
+    '/other': 'nice other place',
+    '/projects': {
+      '/': 'all projects ever',
+      '/:id': (id: string) => `the project with id ${id}`
+    }
+  })
+  const page$ = match$.map(({path, value}: {path: string, value: any}) => {
+    console.log('We are at', path, 'which is', value)
+    console.log('Thongo', sources.router.path(path))
+  })
+  page$.addListener({})
 
   const add$ = xs.merge(
     Feathers.response({service: 'items/', method: 'find'})
@@ -44,10 +57,17 @@ run(function App(sources : any) {
 
   return {
     DOM: vtree$,
+    router: xs.never(),
     Feathers: xs.of({
       service: 'items/',
       method: 'find',
       extra: 'HELLO IT IS ME'
     })
   }
-}, drivers)
+}
+
+run(routerify(main, switchPath), {
+  DOM: makeDOMDriver('#main'),
+  history: makeHashHistoryDriver(),
+  Feathers: makeFeathersDriver('http://localhost:3030')
+})
