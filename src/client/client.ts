@@ -1,6 +1,6 @@
 import {run} from '@cycle/run'
 import {makeDOMDriver, div, input, DOMSource} from '@cycle/dom'
-const Collection = require('./collection').default
+import Collection from '../collection'
 import xs from 'xstream'
 import sampleCombine from 'xstream/extra/sampleCombine'
 
@@ -8,7 +8,7 @@ import {routerify} from 'cyclic-router'
 import {makeHashHistoryDriver} from '@cycle/history'
 import switchPath from 'switch-path'
 
-import {makeFeathersDriver, FeathersRequestStream} from './feathers-driver'
+import {makeFeathersDriver, FeathersRequestStream} from '../feathers-driver'
 
 function ListingItem(sources: {datum: any, removeAll$: xs<{}>, updateAll$: xs<{}>}) {
   const isOurs = (x: any) => x.path === sources.datum.path
@@ -22,8 +22,14 @@ function ListingItem(sources: {datum: any, removeAll$: xs<{}>, updateAll$: xs<{}
   }
 }
 
-function main(sources : any) {
-  const {DOM, Feathers}: {DOM: DOMSource, Feathers: any} = sources
+const feathersDriver = makeFeathersDriver<{
+  'items/': {project: string, path: string, isReal: boolean, group: string, id: any},
+  'projects/': {createdAt: string, path: string, _id: string}
+}>('http://localhost:3030')
+
+const feathersSource = (false as true) && feathersDriver(null) /* Ha */
+function main(sources : {DOM: DOMSource, Feathers: typeof feathersSource, router: any}) {
+  const {DOM, Feathers} = sources
 
   const match$ = sources.router.define({
     '/': 'home sweet home',
@@ -39,10 +45,12 @@ function main(sources : any) {
   })
   page$.addListener({})
 
+  // Fetch items
+
   const add$ = xs.merge(
     Feathers.response({service: 'items/', method: 'find'})
       .flatten() // Flatten xs<Promise>
-      .map(({data}: {data: any}) => xs.fromArray(data || []))
+      .map(pagination => xs.fromArray(pagination.data || []))
       .flatten(), // Flatten xs<Item[]> into xs<Item>
     Feathers.listen({service: 'items/', type: 'created'})
   ).map((datum: any) => ({datum}))
@@ -55,10 +63,12 @@ function main(sources : any) {
   )
   const listItemDOMs$ = Collection.pluck(listItems$, (item: any) => item.DOM)
 
+  // Fetch projects
+
   Feathers.response({service: 'projects/', method: 'find'})
-  .flatten().map((x: any) => x.data)
+  .flatten().map(x => x.data)
   .addListener({
-    next(x: any) { console.log('projects', x) }
+    next(x) { console.log('projects', x) }
   })
 
   const vtree$ = listItemDOMs$.map((vtrees: any) => div(
@@ -113,5 +123,5 @@ function main(sources : any) {
 run(routerify(main, switchPath), {
   DOM: makeDOMDriver('#main'),
   history: makeHashHistoryDriver(),
-  Feathers: makeFeathersDriver('http://localhost:3030')
+  Feathers: feathersDriver
 })

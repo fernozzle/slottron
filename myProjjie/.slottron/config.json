@@ -1,0 +1,6 @@
+{
+  "steps": [
+    {"pattern": "dir/story-<mood>.txt"},
+    {"pattern": "story-<mood>.txt"}
+  ]
+}

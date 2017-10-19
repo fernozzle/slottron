@@ -24,7 +24,8 @@
   "scripts": {
     "test": "npm run eslint && npm run mocha",
     "eslint": "eslint src/. test/. --config .eslintrc.json",
-    "start": "node src/",
+    "start": "node public/server.bundle.js",
+    "watch": "node watch.js",
     "mocha": "mocha test/ --recursive"
   },
   "dependencies": {

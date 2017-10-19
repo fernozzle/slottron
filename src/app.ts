@@ -61,55 +61,80 @@ module.exports = app;
  * my turn binch
  */
 
-const fs = require('fs')
+import {run} from '@cycle/run'
+import Collection from './collection'
+import xs from 'xstream'
+import {makeFeathersDriver, FeathersRequestStream} from './feathers-driver'
+
+import * as fs from 'fs'
 const chokidar = require('chokidar')
-const xs = require('xstream').default
-const delay = require('xstream/extra/delay').default
-const fileWatch = require('./file-watch').default
+import delay from 'xstream/extra/delay'
+import fileWatch from './file-watch'
 
 const items = app.service('/items')
+const projects = app.service('/projects')
 
 console.log(` = = = = = =                    = = = = = = `)
 console.log(`= = = = = = =   it's my turn   = = = = = = =`)
 console.log(` = = = = = =                    = = = = = = `)
 
-app.set('SL-root', './myProjjie')
 app.set('SL-steps', [
   {pattern: 'dir/story-<mood>.txt'},
   {pattern: 'story-<mood>.txt'},
 ])
 
-const watcher = chokidar.watch('.', {
-  cwd: app.get('SL-root'),
-  ignoreInitial: false,
-  alwaysStat: true
-})
-const fileChange$ = xs.create({
-  start: l => watcher
-    .on('add', (path, {size, ctime: date}) => l.next({type: 'add', path, size, date}))
-    .on('change', (path, {size, ctime: date}) => l.next({type: 'update', path, size, date}))
-    .on('unlink', path => l.next({type: 'remove', path})),
-  stop: () => {}
-})
+run(function main(sources) {
+  return {}
+}, {})
 
-const itemsReq$ = fileWatch({fileChange$, watcher, steps: app.get('SL-steps')})
+/*
+const newProject$ = xs.merge(
+  xs.fromPromise(projects.find())
+    .map(({data}) => xs.fromArray(data)).flatten(),
+  xs.create({
+    start: listener => projects.on('created', item => listener.next(item)),
+    stop: () => {}
+  })
+)
+newProject$.addListener({next(project) {
+  console.log('a project', project)
 
-itemsReq$.addListener({
-  next: item => {
-    if (item.activity) {
-      console.log('/group-activity/', item)
-      return
-    }
-    const {type, path, isReal, group, step} = item
-    console.log('/items/', {type, path, isReal, group})
-    if (type === 'add') {
-      items.create({step, path, isReal, group})
-    } else if (type === 'update') {
-      items.patch(null, {step, path, isReal, group}, {query: {path}})
-    } else if (type === 'remove') {
-      items.remove(null, {query: {path}})
-    }
-  },
-  error: e => console.error('itemsReq$ ERROR', e),
-  complete: () => console.log('itemsReq$ complete')
-})
+  items.remove(null, {query: {project}})
+
+  const watcher = chokidar.watch('.', {
+    cwd: project.path,
+    ignoreInitial: false,
+    alwaysStat: true
+  })
+  const fileChange$ = xs.create({
+    start: l => watcher
+      .on('add', (path, {size, ctime: date}) => l.next({type: 'add', path, size, date}))
+      .on('change', (path, {size, ctime: date}) => l.next({type: 'update', path, size, date}))
+      .on('unlink', path => l.next({type: 'remove', path})),
+    stop: () => {}
+  })
+
+  const itemsReq$ = fileWatch({fileChange$, watcher, steps: app.get('SL-steps')})
+
+  itemsReq$.addListener({
+    next: item => {
+      if (item.activity) {
+        console.log('/group-activity/', item)
+        return
+      }
+      const {type, path, isReal, group, step} = item
+      console.log('/items/', {type, path, isReal, group})
+      if (type === 'add' || type === 'update') {
+        items.create({step, path, isReal, group})
+      } else if (type === 'update') {
+        items.patch(null, {step, path, isReal, group}, {query: {path}})
+      } else if (type === 'remove') {
+        items.remove(null, {query: {path}})
+      }
+    },
+    error: e => console.error('itemsReq$ ERROR', e),
+    complete: () => console.log('itemsReq$ complete')
+  })
+}})
+
+*/

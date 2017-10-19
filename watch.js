@@ -1,23 +1,4 @@
-const logger = require('winston')
-const app = require('./app')
 
-const port = app.get('port')
-const server = app.listen(port)
-
-process.on('unhandledRejection', (reason, p) =>
-  logger.error('Unhandled rejection:', p, reason)
-)
-
-server.on('listening', () =>
-  logger.info(
-    `Feathers application started on ` +
-    `http://${app.get('host')}:${port}`
-  )
-)
-
-// Now it's time for webpack watch
-
-//*
 const webpack = require('webpack')
 const path = require('path')
 const ProgressBarPlugin =
@@ -26,10 +7,13 @@ const ProgressBarPlugin =
 const compiler = webpack({
   watch: true,
   cache: true,
-  context: __dirname,
-  entry: {client: './client/client.ts'},
+  context: path.join(__dirname, 'src'),
+  entry: {
+    client: './client/client.ts',
+    server: './server.ts'
+  },
   output: {
-    path: path.join(__dirname, '../public'),
+    path: path.join(__dirname, 'public'),
     filename: '[name].bundle.js'
   },
   resolve: {
@@ -48,4 +32,3 @@ const compiler = webpack({
 }, (err, stats) => {
   if (err) logger.error('Webpack:', err)
 })
-//*/
