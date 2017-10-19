@@ -16,8 +16,8 @@ export type FeathersRequest<Services, Name extends keyof Services> =
   RequestBase<Name, 'remove'> & IDPart
 
 export type FeathersRequestStream<
-  S, M extends FeathersRequest<S, keyof S>['method']
-> = xs<Result<S[keyof S]>[M]> & {request: FeathersRequest<S, keyof S>}
+  S, Name extends keyof S, M extends FeathersRequest<S, Name>['method']
+> = xs<Result<S[Name]>[M]> & {request: FeathersRequest<S, Name>}
 
 interface Result<T> {
   find: feathers.Pagination<T>,
@@ -37,7 +37,7 @@ export function makeFeathersDriver<S>(socketURL: string | feathers.Application) 
 
   return function feathersDriver(request$: xs<R>) {
     let unsub = null as Subscription
-    const response$ = xs.create<FeathersRequestStream<S, R['method']>>({
+    const response$ = xs.create<FeathersRequestStream<S, keyof S, R['method']>>({
       start(listener) {
         unsub = request$.subscribe({
           next(request: R) {
@@ -46,7 +46,7 @@ export function makeFeathersDriver<S>(socketURL: string | feathers.Application) 
             const service = client.service(name)
             const stream = xs.fromPromise(service[method].apply(service,
               [id, data, params].filter(x => x !== undefined)
-            )) as FeathersRequestStream<S, typeof method>
+            )) as FeathersRequestStream<S, typeof name, typeof method>
             stream.request = request
             // A bit of a hack here. If you use the same
             // params as the docs, it'll be fine, okay
@@ -72,7 +72,7 @@ export function makeFeathersDriver<S>(socketURL: string | feathers.Application) 
           stop() { service.removeListener(type, cb) }
         })
       },
-      response<T extends Partial<R>>(matchParams = {} as T): xs<FeathersRequestStream<S, T['method']>> {
+      response<T extends Partial<R>>(matchParams: T): xs<FeathersRequestStream<S, T['service'], T['method']>> {
         const keys = Object.keys(matchParams)
         return response$.filter(({request}) =>
           keys.every(key => matchParams[key] === request[key])
