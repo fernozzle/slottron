@@ -88,128 +88,57 @@ app.set('SL-steps', [
 const feathersDriver = makeFeathersDriver<SlottronModels>(app)
 
 const feathersSource = (false as true) && feathersDriver(null) /* Ha */
+
 function main(sources : {Feathers: typeof feathersSource}) {
   const {Feathers} = sources
 
-  const initialProjectRequest$ = xs.of({service: 'projects/', method: 'find'})
-  const projectRequest$ =
-  Feathers.response({method: 'find', service: 'projects/'}).flatten()
-  .map(({data: initialProjects}) => {
+  const itemSinks = Feathers.collectionStream('projects/', sources => {
+    const {datum: {path, _id: project}} = sources
 
-    console.log('got initial projects!', initialProjects)
+    const watcher = chokidar.watch('.', {
+      cwd: path, ignoreInitial: false, alwaysStat: true
+    }) as EventEmitter
 
-    const projectAdded$ = xs.merge(
-      xs.fromArray(initialProjects),
-      Feathers.listen({service: 'projects/', on: 'created'})
-    ).map(x => ({datum: x}))
+    const fileChange$ = xs.create({
+      start: l => watcher
+        .on('add', (path, {size, ctime: date}) => l.next({type: 'add', path, size, date}))
+        .on('change', (path, {size, ctime: date}) => l.next({type: 'update', path, size, date}))
+        .on('unlink', path => l.next({type: 'remove', path})),
+      stop: () => {}
+    })
+    const itemsReq$ = fileWatch({fileChange$, watcher, steps: app.get('SL-steps')})
 
-    function ProjectItem(sources: any) {
-      const {datum: {path, _id: project}} = sources
-
-      console.log('Just heard about a new project!', sources.datum)
-
-      const remove$ = Feathers.listen({service: 'projects/', on: 'removed'})
-        .filter(x => x._id === project)
-
-      const watcher = chokidar.watch('.', {
-        cwd: path, ignoreInitial: false, alwaysStat: true
-      }) as EventEmitter
-
-      const fileChange$ = xs.create({
-        start: l => watcher
-          .on('add', (path, {size, ctime: date}) => l.next({type: 'add', path, size, date}))
-          .on('change', (path, {size, ctime: date}) => l.next({type: 'update', path, size, date}))
-          .on('unlink', path => l.next({type: 'remove', path})),
-        stop: () => {}
-      })
-      const itemsReq$ = fileWatch({fileChange$, watcher, steps: app.get('SL-steps')})
-
-      const request$ = xs.merge(
-        xs.of({
-          method: 'remove', // clear project's items
+    const request$ = xs.merge(
+      xs.of({
+        method: 'remove',
+        id: null, // clear project's items
+        params: {query: {project}}
+      }),
+      itemsReq$.filter((x: any) => !x.activity)
+      .map((x: any) => {
+        const {type, step, path, isReal, group} = x
+        if (type === 'remove') return {
+          method: 'remove',
           id: null as any,
           params: {query: {project}}
-        }),
-        itemsReq$.filter((x: any) => !x.activity)
-        .map((x: any) => {
-          const {type, step, path, isReal, group} = x
-          if (type === 'remove') return {
-            method: 'remove',
-            id: null as any,
-            params: {query: {project}}
-          }
-          return {
-            method: 'create',
-            data: {project, step, path, isReal, group}
-          }
-        })
-      ).map((x: any) => ({service: 'items/', ...x}))
+        }
+        return {
+          method: 'create',
+          data: {project, step, path, isReal, group}
+        }
+      })
+    ).map((x: any) => ({service: 'items/', ...x}))
 
-      return {remove$, Feathers: request$}
-    }
-    const projectItems$ = Collection(
-      ProjectItem, null, projectAdded$,
-      (sinks: any) => sinks.remove$,
-      (sources: any) => sources.datum.path
-    )
+    return {Feathers: request$}
+  }, datum => datum._id, {})
 
-    const request$ = Collection.merge(projectItems$, (item: any) => item.Feathers)
-    return request$ as xs<any>
-  }).flatten()
-
-  return {Feathers: xs.merge(initialProjectRequest$, projectRequest$)}
+  const itemsRequest$ = xs.merge(
+    itemSinks.Feathers,
+    itemSinks.collection$.map(
+      c => Collection.merge(c, sinks => sinks.Feathers)
+    ).flatten()
+  )
+  return {Feathers: itemsRequest$}
 }
 
 run(main, {Feathers: feathersDriver})
-
-/*
-const newProject$ = xs.merge(
-  xs.fromPromise(projects.find())
-    .map(({data}) => xs.fromArray(data)).flatten(),
-  xs.create({
-    start: listener => projects.on('created', item => listener.next(item)),
-    stop: () => {}
-  })
-)
-newProject$.addListener({next(project) {
-  console.log('a project', project)
-
-  items.remove(null, {query: {project}})
-
-  const watcher = chokidar.watch('.', {
-    cwd: project.path,
-    ignoreInitial: false,
-    alwaysStat: true
-  })
-  const fileChange$ = xs.create({
-    start: l => watcher
-      .on('add', (path, {size, ctime: date}) => l.next({type: 'add', path, size, date}))
-      .on('change', (path, {size, ctime: date}) => l.next({type: 'update', path, size, date}))
-      .on('unlink', path => l.next({type: 'remove', path})),
-    stop: () => {}
-  })
-
-  const itemsReq$ = fileWatch({fileChange$, watcher, steps: app.get('SL-steps')})
-
-  itemsReq$.addListener({
-    next: item => {
-      if (item.activity) {
-        console.log('/group-activity/', item)
-        return
-      }
-      const {type, path, isReal, group, step} = item
-      console.log('/items/', {type, path, isReal, group})
-      if (type === 'add' || type === 'update') {
-        items.create({step, path, isReal, group})
-      } else if (type === 'update') {
-        items.patch(null, {step, path, isReal, group}, {query: {path}})
-      } else if (type === 'remove') {
-        items.remove(null, {query: {path}})
-      }
-    },
-    error: e => console.error('itemsReq$ ERROR', e),
-    complete: () => console.log('itemsReq$ complete')
-  })
-}})
-
-*/
