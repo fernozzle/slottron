@@ -1,24 +1,24 @@
-const path = require('path');
+import * as path from 'path'
 const favicon = require('serve-favicon');
 const compress = require('compression');
 const cors = require('cors');
 const helmet = require('helmet');
 const bodyParser = require('body-parser');
 
-const feathers = require('feathers');
+import * as feathers from 'feathers'
 const configuration = require('feathers-configuration');
-const hooks = require('feathers-hooks');
-const rest = require('feathers-rest');
-const socketio = require('feathers-socketio');
+import * as hooks from 'feathers-hooks'
+import * as rest from 'feathers-rest'
+import * as socketio from 'feathers-socketio'
 
-const handler = require('feathers-errors/handler');
-const notFound = require('feathers-errors/not-found');
+import * as handler from 'feathers-errors/handler'
+import * as notFound from 'feathers-errors/not-found'
 
-const middleware = require('./middleware');
-const services = require('./services');
-const appHooks = require('./app.hooks');
+import * as middleware from './middleware'
+import * as services from './services'
+import * as appHooks from './app.hooks'
 
-const files = require('./files')
+import * as files from './files'
 
 const app = feathers();
 
@@ -68,6 +68,7 @@ import {makeFeathersDriver, FeathersRequestStream} from './feathers-driver'
 
 import * as fs from 'fs'
 const chokidar = require('chokidar')
+import {EventEmitter} from 'events'
 import delay from 'xstream/extra/delay'
 import fileWatch from './file-watch'
 
@@ -83,9 +84,85 @@ app.set('SL-steps', [
   {pattern: 'story-<mood>.txt'},
 ])
 
-run(function main(sources) {
-  return {}
-}, {})
+const feathersDriver = makeFeathersDriver<{
+  'items/': {project: string, path: string, isReal: boolean, group: string, id: any},
+  'projects/': {createdAt: string, path: string, _id: string}
+}>(app)
+
+const feathersSource = (false as true) && feathersDriver(null) /* Ha */
+function main(sources : {Feathers: typeof feathersSource}) {
+  const {Feathers} = sources
+
+  const initialProjectRequest$ = xs.of({service: 'projects/', method: 'find'})
+  const projectRequest$ =
+  Feathers.response({method: 'find', service: 'projects/'}).flatten()
+  .map(({data: initialProjects}) => {
+
+    console.log('got initial projects!', initialProjects)
+
+    const projectAdded$ = xs.merge(
+      xs.fromArray(initialProjects),
+      Feathers.listen({service: 'projects/', type: 'created'})
+    ).map(x => ({datum: x}))
+
+    function ProjectItem(sources: any) {
+      const {datum: {path, _id: project}} = sources
+
+      console.log('Just heard about a new project!', sources.datum)
+
+      const remove$ = Feathers.listen({service: 'projects/', type: 'removed'})
+        .filter(x => x._id === project)
+
+      const watcher = chokidar.watch('.', {
+        cwd: path, ignoreInitial: false, alwaysStat: true
+      }) as EventEmitter
+
+      const fileChange$ = xs.create({
+        start: l => watcher
+          .on('add', (path, {size, ctime: date}) => l.next({type: 'add', path, size, date}))
+          .on('change', (path, {size, ctime: date}) => l.next({type: 'update', path, size, date}))
+          .on('unlink', path => l.next({type: 'remove', path})),
+        stop: () => {}
+      })
+      const itemsReq$ = fileWatch({fileChange$, watcher, steps: app.get('SL-steps')})
+
+      const request$ = xs.merge(
+        xs.of({
+          method: 'remove', // clear project's items
+          id: null as any,
+          params: {query: {project}}
+        }),
+        itemsReq$.filter((x: any) => !x.activity)
+        .map((x: any) => {
+          const {type, step, path, isReal, group} = x
+          if (type === 'remove') return {
+            method: 'remove',
+            id: null as any,
+            params: {query: {project}}
+          }
+          return {
+            method: 'create',
+            data: {project, step, path, isReal, group}
+          }
+        })
+      ).map((x: any) => ({service: 'items/', ...x}))
+
+      return {remove$, Feathers: request$}
+    }
+    const projectItems$ = Collection(
+      ProjectItem, null, projectAdded$,
+      (sinks: any) => sinks.remove$,
+      (sources: any) => sources.datum.path
+    )
+
+    const request$ = Collection.merge(projectItems$, (item: any) => item.Feathers)
+    return request$ as xs<any>
+  }).flatten()
+
+  return {Feathers: xs.merge(initialProjectRequest$, projectRequest$)}
+}
+
+run(main, {Feathers: feathersDriver})
 
 /*
 const newProject$ = xs.merge(

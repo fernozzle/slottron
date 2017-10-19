@@ -1,8 +1,6 @@
 import {default as xs, Subscription, Listener} from 'xstream'
 
-const io = require('socket.io-client')
 import * as feathers from 'feathers/client'
-import * as socketio from 'feathers-socketio/client'
 
 interface RequestBase<S, M> {service: S, method: M, params: feathers.Params, [key: string]: any}
 interface IDPart {id: number | string}
@@ -28,12 +26,8 @@ interface Result<T> {
   remove: T
 }
 
-export function makeFeathersDriver<S>(socketURL: string | feathers.Application) {
+export function makeFeathersDriver<S>(client: feathers.Application) {
   type R = FeathersRequest<S, keyof S>
-
-  const client = (typeof socketURL === 'string')
-    ? feathers().configure(socketio(io(socketURL)))
-    : socketURL
 
   return function feathersDriver(request$: xs<R>) {
     let unsub = null as Subscription
@@ -61,10 +55,10 @@ export function makeFeathersDriver<S>(socketURL: string | feathers.Application) 
     response$.addListener({})
 
     return {
-      listen({service: name, type}: {service: string, type: string}) {
+      listen<T extends Partial<R>>({service: name, type}: T) {
         const service = client.service(name)
         let cb = null as any
-        return xs.create<any>({
+        return xs.create<S[T['service']]>({
           start(listener) {
             cb = (x: any) => listener.next(x)
             service.on(type, cb)

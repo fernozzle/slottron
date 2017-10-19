@@ -3,21 +3,14 @@ const webpack = require('webpack')
 const path = require('path')
 const ProgressBarPlugin =
   require('progress-bar-webpack-plugin')
+const nodeExternals = require('webpack-node-externals')
 
-const compiler = webpack({
+const config = {
   watch: true,
   cache: true,
   context: path.join(__dirname, 'src'),
-  entry: {
-    client: './client/client.ts',
-    server: './server.ts'
-  },
-  output: {
-    path: path.join(__dirname, 'public'),
-    filename: '[name].bundle.js'
-  },
   resolve: {
-    extensions: ['.ts', '.js'],
+    extensions: ['.ts', '.js', '.json'],
     modules: ['node_modules']
   },
   plugins: [new ProgressBarPlugin()],
@@ -29,6 +22,30 @@ const compiler = webpack({
     },
     exclude: /node_modules/
   }]}
-}, (err, stats) => {
+}
+
+const compiler = webpack([
+  {
+    name: 'client',
+    entry: './client/client.ts',
+    target: 'web',
+    output: {
+      path: path.join(__dirname, 'public'),
+      filename: 'client.bundle.js'
+    },
+    ...config
+  },
+  {
+    name: 'server',
+    entry: './server.ts',
+    target: 'node',
+    externals: [nodeExternals()],
+    output: {
+      path: path.join(__dirname, 'public'),
+      filename: 'server.bundle.js'
+    },
+    ...config
+  }
+], (err, stats) => {
   if (err) logger.error('Webpack:', err)
 })

@@ -7,8 +7,13 @@ import sampleCombine from 'xstream/extra/sampleCombine'
 import {routerify} from 'cyclic-router'
 import {makeHashHistoryDriver} from '@cycle/history'
 import switchPath from 'switch-path'
+import * as feathers from 'feathers/client'
+import * as socketio from 'feathers-socketio/client'
+const io = require('socket.io-client')
 
 import {makeFeathersDriver, FeathersRequestStream} from '../feathers-driver'
+
+const client = feathers().configure(socketio(io('http://localhost:3030')))
 
 function ListingItem(sources: {datum: any, removeAll$: xs<{}>, updateAll$: xs<{}>}) {
   const isOurs = (x: any) => x.path === sources.datum.path
@@ -25,7 +30,7 @@ function ListingItem(sources: {datum: any, removeAll$: xs<{}>, updateAll$: xs<{}
 const feathersDriver = makeFeathersDriver<{
   'items/': {project: string, path: string, isReal: boolean, group: string, id: any},
   'projects/': {createdAt: string, path: string, _id: string}
-}>('http://localhost:3030')
+}>(client)
 
 const feathersSource = (false as true) && feathersDriver(null) /* Ha */
 function main(sources : {DOM: DOMSource, Feathers: typeof feathersSource, router: any}) {
