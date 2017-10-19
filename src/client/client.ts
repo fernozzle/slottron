@@ -12,6 +12,7 @@ import * as socketio from 'feathers-socketio/client'
 const io = require('socket.io-client')
 
 import {makeFeathersDriver, FeathersRequestStream} from '../feathers-driver'
+import {SlottronModels} from '../common'
 
 const client = feathers().configure(socketio(io('http://localhost:3030')))
 
@@ -27,10 +28,7 @@ function ListingItem(sources: {datum: any, removeAll$: xs<{}>, updateAll$: xs<{}
   }
 }
 
-const feathersDriver = makeFeathersDriver<{
-  'items/': {project: string, path: string, isReal: boolean, group: string, id: any},
-  'projects/': {createdAt: string, path: string, _id: string}
-}>(client)
+const feathersDriver = makeFeathersDriver<SlottronModels>(client)
 
 const feathersSource = (false as true) && feathersDriver(null) /* Ha */
 function main(sources : {DOM: DOMSource, Feathers: typeof feathersSource, router: any}) {
@@ -60,8 +58,8 @@ function main(sources : {DOM: DOMSource, Feathers: typeof feathersSource, router
     Feathers.listen({service: 'items/', type: 'created'})
   ).map((datum: any) => ({datum}))
 
-  const removeAll$ = Feathers.listen({service: 'items/', type: 'removed'})
-  const updateAll$ = Feathers.listen({service: 'items/', type: 'patched'})
+  const removeAll$ = Feathers.listen({service: 'items/', on: 'removed'})
+  const updateAll$ = Feathers.listen({service: 'items/', on: 'patched'})
   const listItems$ = Collection(ListingItem, {removeAll$, updateAll$}, add$,
     (item: any) => item.remove$,
     (sources: any) => console.log('id selector', sources.datum)
@@ -70,20 +68,74 @@ function main(sources : {DOM: DOMSource, Feathers: typeof feathersSource, router
 
   // Fetch projects
 
-  Feathers.response({service: 'projects/', method: 'find'})
-  .flatten().map(x => x.data)
-  .addListener({
-    next(x) { console.log('projects', x) }
-  })
+  function feathersCollection(
+    service: string,
+    component: (sources: any) => any,
+    idSelector: (model: any) => string,
+    sources: {Feathers: any, fetch$?: xs<any>}
+  ) {
+    function sameID(datum: any) {
+      return (other: any) => idSelector(datum) === idSelector(other)
+    }
+    const collection$ = sources.Feathers.response({
+      service, method: 'find'
+    }).flatten().map(({data}: {data: any}) => {
 
-  const vtree$ = listItemDOMs$.map((vtrees: any) => div(
+      const sourcesOfAnAdd$ = xs.merge(
+        xs.fromArray(data),
+        sources.Feathers.listen({service, on: 'created'})
+      ).map((datum: any) => ({
+        datum, // For those who seek synchonosity
+        datum$: sources.Feathers.listen({service, on: 'patched'})
+          .filter(sameID(datum)).startWith(datum),
+        remove$: sources.Feathers.listen({service, on: 'removed'})
+          .filter(sameID(datum))
+      }))
+
+      return Collection(
+        (sources: any) => ({remove$: sources.remove$, ...component(sources)}),
+        null,
+        sourcesOfAnAdd$,
+        (sinks: any) => sinks.remove$,
+        (sources: any) => idSelector(sources.datum)
+      )
+    }) as xs<any>
+
+    const request$ = xs.merge(
+      xs.of(null),
+      sources.fetch$ || xs.empty()
+    ).mapTo({service, method: 'find'})
+
+    return {collection$, Feathers: request$}
+  }
+
+  const projectsSinks = feathersCollection('projects/', (sources: any) => {
+    const {datum$} = sources
+    const vnode$ = datum$.map((d: any) => div(`Project ${d._id}: ${JSON.stringify(d)}`))
+    return {DOM: vnode$}
+  }, (datum: any) => datum._id, {Feathers})
+
+  projectsSinks.collection$.addListener({next(items$: any) {
+    console.log('deedoly', items$)
+    items$.addListener({next(item: any) { console.log('itam', item) }})
+  }})
+
+  const projectsVtree$ = projectsSinks.collection$.map((collection: any) => {
+    return Collection.pluck(collection, (sinks: any) => sinks.DOM)
+  }).flatten()
+
+  const vtree$ = xs.combine(
+    listItemDOMs$,
+    projectsVtree$
+  ).map(([listItems, projectItems]) => div(
     [
       div([
+        div(projectItems),
         input('.proj-path', {attrs: {placeholder: 'Path'}}),
         input('.proj-add', {attrs: {type: 'button', value: 'Add project'}}),
         input('.proj-clear', {attrs: {type: 'button', value: 'Clear projects'}})
       ]),
-      div(vtrees)
+      div(listItems)
     ]
   ))
 
@@ -108,6 +160,7 @@ function main(sources : {DOM: DOMSource, Feathers: typeof feathersSource, router
     DOM: vtree$,
     router: xs.never(),
     Feathers: xs.merge(
+      projectsSinks.Feathers,
       addProject$,
       clearProject$,
       xs.of(
@@ -115,10 +168,6 @@ function main(sources : {DOM: DOMSource, Feathers: typeof feathersSource, router
           service: 'items/',
           method: 'find',
           extra: 'HELLO IT IS ME'
-        } as any,
-        {
-          service: 'projects/',
-          method: 'find'
         }
       )
     )

@@ -65,6 +65,7 @@ import {run} from '@cycle/run'
 import Collection from './collection'
 import xs from 'xstream'
 import {makeFeathersDriver, FeathersRequestStream} from './feathers-driver'
+import {SlottronModels} from './common'
 
 import * as fs from 'fs'
 const chokidar = require('chokidar')
@@ -84,10 +85,7 @@ app.set('SL-steps', [
   {pattern: 'story-<mood>.txt'},
 ])
 
-const feathersDriver = makeFeathersDriver<{
-  'items/': {project: string, path: string, isReal: boolean, group: string, id: any},
-  'projects/': {createdAt: string, path: string, _id: string}
-}>(app)
+const feathersDriver = makeFeathersDriver<SlottronModels>(app)
 
 const feathersSource = (false as true) && feathersDriver(null) /* Ha */
 function main(sources : {Feathers: typeof feathersSource}) {
@@ -102,7 +100,7 @@ function main(sources : {Feathers: typeof feathersSource}) {
 
     const projectAdded$ = xs.merge(
       xs.fromArray(initialProjects),
-      Feathers.listen({service: 'projects/', type: 'created'})
+      Feathers.listen({service: 'projects/', on: 'created'})
     ).map(x => ({datum: x}))
 
     function ProjectItem(sources: any) {
@@ -110,7 +108,7 @@ function main(sources : {Feathers: typeof feathersSource}) {
 
       console.log('Just heard about a new project!', sources.datum)
 
-      const remove$ = Feathers.listen({service: 'projects/', type: 'removed'})
+      const remove$ = Feathers.listen({service: 'projects/', on: 'removed'})
         .filter(x => x._id === project)
 
       const watcher = chokidar.watch('.', {

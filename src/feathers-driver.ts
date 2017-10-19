@@ -55,15 +55,15 @@ export function makeFeathersDriver<S>(client: feathers.Application) {
     response$.addListener({})
 
     return {
-      listen<T extends Partial<R>>({service: name, type}: T) {
+      listen<T extends Partial<R>>({service: name, on}: T) {
         const service = client.service(name)
         let cb = null as any
         return xs.create<S[T['service']]>({
           start(listener) {
             cb = (x: any) => listener.next(x)
-            service.on(type, cb)
+            service.on(on, cb)
           },
-          stop() { service.removeListener(type, cb) }
+          stop() { service.removeListener(on, cb) }
         })
       },
       response<T extends Partial<R>>(matchParams: T): xs<FeathersRequestStream<S, T['service'], T['method']>> {
