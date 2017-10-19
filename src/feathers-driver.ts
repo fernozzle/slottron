@@ -1,6 +1,6 @@
 import {default as xs, Subscription, Listener} from 'xstream'
-
 import * as feathers from 'feathers/client'
+import Collection from './collection'
 
 interface RequestBase<S, M> {service: S, method: M, params: feathers.Params, [key: string]: any}
 interface IDPart {id: number | string}
@@ -71,7 +71,62 @@ export function makeFeathersDriver<S>(client: feathers.Application) {
         return response$.filter(({request}) =>
           keys.every(key => matchParams[key] === request[key])
         )
+      },
+
+      /**
+       * Convenience function that uses `listen()` and `response()` and returns requests to make
+       */
+      collectionStream<
+        Name extends keyof S,
+        Passed extends {},
+        Added extends {datum: S[Name], datum$: xs<S[Name]>, remove$: xs<S[Name]>},
+        Sinks extends {}
+      >(
+        service: Name,
+        component: (sources: Passed & Added) => Sinks,
+        idSelector?: (model: S[Name]) => string | number,
+        passedSources?: Passed,
+        fetch$ = xs.empty()
+      ) {
+        function sameID(datum: any) {
+          return (other: any) => idSelector(datum) === idSelector(other)
+        }
+        const collection$ = this.response({
+          service, method: 'find'
+        }).flatten().map(({data}: feathers.Pagination<S[Name]>) => {
+
+          const sourcesOfAnAdd$ = xs.merge(
+            xs.fromArray(data),
+            this.listen({service, on: 'created'})
+          ).map((datum: any) => ({
+            datum, // For those who seek synchonosity
+            datum$: this.listen({service, on: 'patched'})
+              .filter(sameID(datum)).startWith(datum),
+            remove$: this.listen({service, on: 'removed'})
+              .filter(sameID(datum))
+          })) as xs<Added>
+
+          return Collection(
+            (sources: Passed & Added) => Object.assign(
+              {remove$: sources.remove$},
+              component(sources)
+            ),
+            passedSources,
+            sourcesOfAnAdd$,
+            (sinks: any) => sinks.remove$,
+            (sources: Passed & Added) => idSelector(sources.datum)
+          )
+        }) as xs<xs<Sinks[]>>
+
+        const request$ = xs.merge(
+          fetch$, xs.of(null)
+        ).mapTo({
+          service, method: 'find'
+        }) as xs<RequestBase<typeof service, 'find'>>
+
+        return {collection$, Feathers: request$}
       }
     }
   }
 }
+

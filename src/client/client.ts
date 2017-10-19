@@ -11,7 +11,7 @@ import * as feathers from 'feathers/client'
 import * as socketio from 'feathers-socketio/client'
 const io = require('socket.io-client')
 
-import {makeFeathersDriver, FeathersRequestStream} from '../feathers-driver'
+import {makeFeathersDriver} from '../feathers-driver'
 import {SlottronModels} from '../common'
 
 const client = feathers().configure(socketio(io('http://localhost:3030')))
@@ -61,66 +61,25 @@ function main(sources : {DOM: DOMSource, Feathers: typeof feathersSource, router
   const removeAll$ = Feathers.listen({service: 'items/', on: 'removed'})
   const updateAll$ = Feathers.listen({service: 'items/', on: 'patched'})
   const listItems$ = Collection(ListingItem, {removeAll$, updateAll$}, add$,
-    (item: any) => item.remove$,
-    (sources: any) => console.log('id selector', sources.datum)
+    item => item.remove$,
+    sources => console.log('id selector', sources.datum)
   )
   const listItemDOMs$ = Collection.pluck(listItems$, (item: any) => item.DOM)
 
   // Fetch projects
 
-  function feathersCollection(
-    service: string,
-    component: (sources: any) => any,
-    idSelector: (model: any) => string,
-    sources: {Feathers: any, fetch$?: xs<any>}
-  ) {
-    function sameID(datum: any) {
-      return (other: any) => idSelector(datum) === idSelector(other)
-    }
-    const collection$ = sources.Feathers.response({
-      service, method: 'find'
-    }).flatten().map(({data}: {data: any}) => {
-
-      const sourcesOfAnAdd$ = xs.merge(
-        xs.fromArray(data),
-        sources.Feathers.listen({service, on: 'created'})
-      ).map((datum: any) => ({
-        datum, // For those who seek synchonosity
-        datum$: sources.Feathers.listen({service, on: 'patched'})
-          .filter(sameID(datum)).startWith(datum),
-        remove$: sources.Feathers.listen({service, on: 'removed'})
-          .filter(sameID(datum))
-      }))
-
-      return Collection(
-        (sources: any) => ({remove$: sources.remove$, ...component(sources)}),
-        null,
-        sourcesOfAnAdd$,
-        (sinks: any) => sinks.remove$,
-        (sources: any) => idSelector(sources.datum)
-      )
-    }) as xs<any>
-
-    const request$ = xs.merge(
-      xs.of(null),
-      sources.fetch$ || xs.empty()
-    ).mapTo({service, method: 'find'})
-
-    return {collection$, Feathers: request$}
-  }
-
-  const projectsSinks = feathersCollection('projects/', (sources: any) => {
+  const projectsSinks = Feathers.collectionStream('projects/', sources => {
     const {datum$} = sources
-    const vnode$ = datum$.map((d: any) => div(`Project ${d._id}: ${JSON.stringify(d)}`))
+    const vnode$ = datum$.map(d => div(`Project ${d._id}: ${JSON.stringify(d)}`))
     return {DOM: vnode$}
-  }, (datum: any) => datum._id, {Feathers})
+  }, datum => datum._id)
 
   projectsSinks.collection$.addListener({next(items$: any) {
     console.log('deedoly', items$)
     items$.addListener({next(item: any) { console.log('itam', item) }})
   }})
 
-  const projectsVtree$ = projectsSinks.collection$.map((collection: any) => {
+  const projectsVtree$ = projectsSinks.collection$.map(collection => {
     return Collection.pluck(collection, (sinks: any) => sinks.DOM)
   }).flatten()
 
