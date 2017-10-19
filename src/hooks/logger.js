@@ -3,15 +3,16 @@ const logger = require('winston');
 
 module.exports = function () {
   return function (hook) {
-    let message = `${hook.type}: ${hook.path} - Method: ${hook.method}`;
+    let message = `${hook.path} ${hook.method.toUpperCase()} ''''''''''''''''''''''''''''''''''''''''''''''''
+    `;
 
     if (hook.type === 'error') {
       message += `: ${hook.error.message}`;
     }
 
     logger.info(message);
-    logger.debug('hook.data', hook.data);
-    logger.debug('hook.params', hook.params);
+    logger.info('   hook.data', hook.data);
+    logger.info('   hook.params', hook.params);
 
     if (hook.result) {
       logger.debug('hook.result', hook.result);
