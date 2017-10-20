@@ -1,5 +1,5 @@
 import {run} from '@cycle/run'
-import {makeDOMDriver, div, input, DOMSource} from '@cycle/dom'
+import {makeDOMDriver, div, input, nav, p, span, a, i, button, DOMSource} from '@cycle/dom'
 import Collection from '../collection'
 import xs from 'xstream'
 import sampleCombine from 'xstream/extra/sampleCombine'
@@ -40,6 +40,7 @@ function main(sources : {DOM: DOMSource, Feathers: typeof feathersSource, router
 
   // Fetch items
 
+
   const itemSinks = Feathers.collectionStream('items/', sources => {
     const {datum$, DOM} = sources
     const vnode$ = datum$.map(d => div( '.item',
@@ -48,79 +49,84 @@ function main(sources : {DOM: DOMSource, Feathers: typeof feathersSource, router
     ))
     return {DOM: vnode$}
   }, datum => datum.id, {DOM: sources.DOM})
-  const itemsVtree$ = xs.merge(
-    itemSinks.Feathers,
-    itemSinks.collection$.map(
-      c => Collection.pluck(c, sinks => sinks.DOM)
-    ).flatten()
-  )
+  const itemsVtree$ = itemSinks.collection$.map(
+    c => Collection.pluck(c, sinks => sinks.DOM)
+  ).flatten().map(nodes => div('.column.is-9.is-fullheight', nodes))
 
   // Fetch projects
 
   const projectsSinks = Feathers.collectionStream('projects/', sources => {
     const {datum, datum$, DOM} = sources
 
-    const request$ = DOM.select('.remove').events('click')
-      .mapTo({service: 'projects/', method: 'remove', id: datum._id})
+    const path$ = DOM.select('.panel-block').events('click')
+      .mapTo(`/projects/${datum._id}`)
 
-    const vnode$ = datum$.map(d => div([
-      `Project ${d._id}: ${JSON.stringify(d)} `,
-      input('.remove', {attrs: {value: '\u274c Remove', type: 'button'}})
+    const vnode$ = datum$.map(d => a('.panel-block', [
+      span('.panel-icon', [i('.fa.fa-folder')]),
+      d.path
     ]))
 
-    return {DOM: vnode$, Feathers: request$}
+    return {DOM: vnode$, router: path$}
   }, datum => datum._id, {DOM: sources.DOM})
 
   const projectsVtree$ = projectsSinks.collection$.map(
     c => Collection.pluck(c, sinks => sinks.DOM)
-  ).flatten()
+  ).flatten().map(items => nav('.column.is-3.is-fullheight.panel', [
+    p('.panel-heading', 'Projects'),
+    div('.panel-block', [
+      p('.control.has-icons-left.has-icons-right', [
+        input('.SL-projects-new.input.is-small', {
+          key: Math.random(),
+          attrs: {type: 'text', placeholder: 'New project path...'}
+        }),
+        span('.icon.is-small.is-left', [i('.fa.fa-link')]),
+        span('.icon.is-small.is-right', [i('.fa.fa-plus')])
+      ])
+    ]),
+    ...items,
+    div('.panel-block', [
+      button('.SL-projects-clear.button.is-link.is-outlined.is-fullwidth', 'Clear projects')
+    ])
+  ]))
   const projectsRequest$ = xs.merge(
+    DOM.select('.SL-projects-new').events('keydown')
+      .filter((e: KeyboardEvent) => e.keyCode === 13)
+      .map(e => ({
+        service: 'projects/',
+        method: 'create',
+        data: {path: (e.target as HTMLInputElement).value}
+      })),
+    DOM.select('.SL-projects-clear').events('click').mapTo({
+      service: 'projects/',
+      method: 'remove',
+      id: null
+    }),
     projectsSinks.Feathers,
-    projectsSinks.collection$.map(
-      c => Collection.merge(c, sinks => sinks.Feathers)
-    ).flatten()
   )
+  const projectsPath$ = projectsSinks.collection$.map(
+    c => Collection.merge(c, sinks => sinks.router)
+  ).flatten()
 
   const vtree$ = xs.combine(
     itemsVtree$,
     projectsVtree$
-  ).map(([listItems, projectItems]) => div(
+  ).map(([list, project]) => div('.columns.is-fullheight',
     [
-      div([
-        div(projectItems),
-        input('.proj-path', {attrs: {placeholder: 'Path'}}),
-        input('.proj-add', {attrs: {type: 'button', value: 'Add project'}}),
-        input('.proj-clear', {attrs: {type: 'button', value: 'Clear projects'}})
-      ]),
-      div(listItems)
+      project,
+      list
     ]
   ))
 
-  const input$ = DOM.select('.proj-path').events('keyup')
-    .map(ev => ev.target['value'])
-  const addProject$ = DOM.select('.proj-add').events('click')
-    .compose(sampleCombine(input$))
-    .map(([click, path]) => ({
-      service: 'projects/',
-      method: 'create',
-      data: {path}
-    }))
-  const clearProject$ = DOM.select('.proj-clear').events('click')
-    .mapTo({
-      service: 'projects/',
-      method: 'remove',
-      id: null,
-      params: {query: null}
-    })
-
   return {
     DOM: vtree$,
-    router: xs.never(),
+    router: xs.merge(
+      Feathers.response({service: 'projects/', method: 'create'})
+        .flatten().map(x => `/projects/${x._id}`),
+      projectsPath$
+    ),
     Feathers: xs.merge(
       itemSinks.Feathers,
-      projectsRequest$,
-      addProject$,
-      clearProject$,
+      projectsRequest$
     )
   }
 }
