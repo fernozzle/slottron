@@ -4,7 +4,7 @@ import Collection from '../collection'
 import xs from 'xstream'
 import sampleCombine from 'xstream/extra/sampleCombine'
 
-import {routerify} from 'cyclic-router'
+import {routerify, RouteMatcherReturn} from 'cyclic-router'
 import {makeHashHistoryDriver} from '@cycle/history'
 import switchPath from 'switch-path'
 import * as feathers from 'feathers/client'
@@ -13,6 +13,8 @@ const io = require('socket.io-client')
 
 import {makeFeathersDriver} from '../feathers-driver'
 import {SlottronModels} from '../common'
+
+require('../style/index.sass')
 
 const client = feathers().configure(socketio(io('http://localhost:3030')))
 
@@ -29,7 +31,7 @@ function main(sources : {DOM: DOMSource, Feathers: typeof feathersSource, router
       '/': 'all projects ever',
       '/:id': (id: string) => `the project with id ${id}`
     }
-  })
+  }) as xs<RouteMatcherReturn>
   const page$ = match$.map(({path, value}: {path: string, value: any}) => {
     console.log('We are at', path, 'which is', value)
     console.log('Thongo', sources.router.path(path))
