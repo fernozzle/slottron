@@ -33,9 +33,12 @@ export default function SidebarComp(sources: {
 
   const vtree$ = sinks.collection$.map(
     c => Collection.pluck(c, sinks => sinks.DOM)
-  ).flatten().map(items => div('.column.is-narrow',
+  ).flatten().map(items => div('.column.is-narrow.sidebar',
     {style: {width: '300px'}},
-    [UserPage(items)]
+    [ div('.sidebar-pages', [
+      div('.sidebar-page', [UserPage(items)]),
+      div('.sidebar-page', [ProjectPage(items)]),
+    ])]
   ))
 
   // Feathers out
