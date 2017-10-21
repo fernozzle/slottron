@@ -36,7 +36,7 @@ export default function SidebarComp(sources: {
   ).flatten().map(items => div('.column.is-narrow.sidebar',
     {style: {width: '300px'}},
     [ div('.sidebar-pages', [
-      div('.sidebar-page', [UserPage(items)]),
+      // div('.sidebar-page', [UserPage(items)]),
       div('.sidebar-page', [ProjectPage(items)]),
     ])]
   ))
@@ -94,7 +94,7 @@ function ProjectPage(items: VNode[]) {
         li([a([
           span('.icon.is-left', [i('.fa.fa-indent')]),
           'Slots',
-          span('.tag.is-primary', {style: {marginLeft: '.5em'}},'3')
+          span('.tag.is-danger', {style: {marginLeft: '.5em'}},'3'),
         ])]),
         li([a([
           span('.icon.is-left', [a('.fa.fa-users')]),
@@ -106,7 +106,22 @@ function ProjectPage(items: VNode[]) {
         div('.level-right', [ a('.button.is-small', [span('.icon', [i('.fa.fa-pencil')])]) ])
       ])]),
       ul('.menu-list', [
-        ...items,
+        li([a('', [
+          span('.icon.is-left.has-text-danger', [i('.fa.fa-circle-o')]),
+          'Storyboard pages'
+        ])]),
+        li([a('', [
+          span('.icon.is-left.has-text-warning', [i('.fa.fa-circle-o')]),
+          'Line regions'
+        ])]),
+        li([a('', [
+          span('.icon.is-left.has-text-success', [i('.fa.fa-circle-o')]),
+          'Voice acting'
+        ])]),
+        li([a('', [
+          span('.icon.is-left.has-text-info', [i('.fa.fa-circle-o')]),
+          'Voice FX'
+        ])]),
       ]),
     ])
   ])
