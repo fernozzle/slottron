@@ -1,6 +1,13 @@
+/**
+ * Everyone. Come around, come around.
+ *
+ * Welcome to the home of the world's most awe-inspiring function.
+ */
+
 import {default as xs, Subscription, Listener} from 'xstream'
 import * as feathers from 'feathers/client'
 import Collection from './collection'
+import {SlottronModels} from './common'
 
 interface RequestBase<S, M> {service: S, method: M, params: feathers.Params, [key: string]: any}
 interface IDPart {id: number | string}
@@ -13,6 +20,14 @@ export type FeathersRequest<Services, Name extends keyof Services> =
   RequestBase<Name, 'patch'> & IDPart & DataPart<Services[Name]> |
   RequestBase<Name, 'remove'> & IDPart
 
+/**
+ * Before we begin, I want to set the stage. We all witness a
+ * great variety of functions in our lives. Some provide a
+ * robust typing, while many do not. Some exceed expectations.
+ *
+ * And now...
+ */
+
 export type FeathersRequestStream<
   S, Name extends keyof S, M extends FeathersRequest<S, Name>['method']
 > = xs<Result<S[Name]>[M]> & {request: FeathersRequest<S, Name>}
@@ -24,6 +39,16 @@ interface Result<T> {
   update: T,
   patch: T,
   remove: T
+}
+
+/**
+ * The world's most awe-inspiring function.
+ */
+export function makeFeathersSource<Model extends {}>() {
+  const client = null as feathers.Application
+  const feathersDriver = (false as true) && makeFeathersDriver<Model>(client)
+  const feathersSource = (false as true) && feathersDriver(null)
+  return undefined as typeof feathersSource
 }
 
 export function makeFeathersDriver<S>(client: feathers.Application) {
@@ -129,4 +154,8 @@ export function makeFeathersDriver<S>(client: feathers.Application) {
     }
   }
 }
+
+/**
+ * Nothing beats it.
+ */
 

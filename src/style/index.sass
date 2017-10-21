@@ -1,15 +1,39 @@
+$white: hsl(0, 0, 95%)
+$body-background-color: $white
+$primary: hsl(348, 100%, 61%)
+$light: #fff
+
+$menu-item-hover-background-color: $light
+
 @import "~bulma/bulma"
 
 body
   height: 100%
 
+$sidebar-pad: 2rem
+$sidebar-itemgap: 1rem
+
+.is-left
+  margin-right: .5rem
+
+.hero
+  .hero-head
+    padding: 1rem 1rem 0
+  .hero-body
+    padding: 1rem $sidebar-pad 1.5rem
+
 .menu
   padding-top: 1rem
+  & > ul > li > a
+    margin: 0 $sidebar-itemgap
+    border-radius: $radius-large
   & > ul > li > a, & > p
     padding:
-      left: 2rem
-      right: 2rem
+      left: $sidebar-pad - $sidebar-itemgap
+      right: $sidebar-pad - $sidebar-itemgap
+  p.menu-label
+    margin-bottom: .1rem
   p.control
-    margin: .5rem 2rem
+    margin: .5rem $sidebar-pad
   button
     margin-top: .5rem
