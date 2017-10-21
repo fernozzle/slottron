@@ -26,7 +26,8 @@
     "test": "npm run eslint && npm run mocha",
     "eslint": "eslint src/. test/. --config .eslintrc.json",
     "start": "node public/server.bundle.js",
-    "watch": "webpack-dev-server --progress --colors --inline",
+    "watchn't": "webpack-dev-server --progress --colors --inline",
+    "watch": "webpack --watch",
     "mocha": "mocha test/ --recursive"
   },
   "dependencies": {

@@ -14,7 +14,12 @@ const config = {
     extensions: ['.ts', '.js', '.json', '.sass'],
     modules: ['node_modules']
   },
-  plugins: [],
+  /*
+  plugins: (ENV === 'production'
+    ? [new webpack.optimize.UglifyJSPlugin({minimize: true})]
+    : [new webpack.HotModuleReplacementPlugin()]
+  ),
+  */
   module: {rules: [{
     test: /\.[tj]sx?$/,
     use: {
@@ -28,13 +33,7 @@ const config = {
 module.exports = [
   {...config,
     name: 'client',
-    entry: (ENV === 'production'
-      ? ['./src/client/client.ts']
-      : [
-        'webpack-dev-server/client?http://localhost:8080',
-        './src/client/client.ts'
-      ]
-    ),
+    entry: './src/client/client.ts',
     target: 'web',
     module: {rules: [
       ...config.module.rules,
@@ -43,10 +42,6 @@ module.exports = [
         loaders: ['style-loader', 'css-loader', 'sass-loader']
       }
     ]},
-    plugins: [...config.plugins, ...(ENV === 'production'
-      ? [new webpack.optimize.UglifyJSPlugin({minimize: true})]
-      : [new webpack.HotModuleReplacementPlugin()]
-    )],
     devServer: {
       historyApiFallback: true,
       contentBase: './',
@@ -57,7 +52,7 @@ module.exports = [
       filename: 'client.bundle.js'
     }
   },
-  {
+  {...config,
     name: 'server',
     entry: './src/server.ts',
     target: 'node',
@@ -65,7 +60,6 @@ module.exports = [
     output: {
       path: path.join(__dirname, 'public'),
       filename: 'server.bundle.js'
-    },
-    ...config
+    }
   }
 ]

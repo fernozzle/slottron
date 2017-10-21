@@ -40,7 +40,8 @@ module.exports = function () {
       create: [],
       update: [],
       patch: [],
-      remove: []
+      // remove: []
+      remove: [clearItemsToo] // Why
     },
 
     error: {
@@ -59,9 +60,19 @@ module.exports = function () {
   }
 };
 
+function clearItemsToo(hook) {
+  const {service, app, params, id} = hook
+  console.log('id', id, 'params', params)
+  const items = app.service('items/')
+  if (id) return items.remove(id).then(x => hook)
+  if (params._id) return items.remove(null, {query: {'project': params._id}}).then(x => hook)
+  return items.remove(null).then(x => hook)
+}
+
 function excludeByPath({service, data}) {
+  console.log('IT IS ME!!!')
   return service.find(
-    {query: {path: data.path}}
+    {query: {path: data['path']}}
   ).then(result => {
     if (result.total == 0) return;
     throw new Error('already exists')
