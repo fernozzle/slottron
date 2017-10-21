@@ -1,5 +1,5 @@
 import {run} from '@cycle/run'
-import {makeDOMDriver, div, input, nav, p, span, a, i, button, DOMSource} from '@cycle/dom'
+import {makeDOMDriver, div, input, nav, p, span, a, i, button, DOMSource, aside, ul, li, section} from '@cycle/dom'
 import Collection from '../collection'
 import xs from 'xstream'
 import sampleCombine from 'xstream/extra/sampleCombine'
@@ -51,7 +51,7 @@ function main(sources : {DOM: DOMSource, Feathers: typeof feathersSource, router
   }, datum => datum.id, {DOM: sources.DOM})
   const itemsVtree$ = itemSinks.collection$.map(
     c => Collection.pluck(c, sinks => sinks.DOM)
-  ).flatten().map(nodes => div('.column.is-9.is-fullheight', nodes))
+  ).flatten().map(nodes => div('.column', nodes))
 
   // Fetch projects
 
@@ -61,9 +61,12 @@ function main(sources : {DOM: DOMSource, Feathers: typeof feathersSource, router
     const path$ = DOM.select('.panel-block').events('click')
       .mapTo(`/projects/${datum._id}`)
 
-    const vnode$ = datum$.map(d => a('.panel-block', [
-      span('.panel-icon', [i('.fa.fa-folder')]),
-      d.path
+    const vnode$ = datum$.map(d => li([
+      // span('.panel-icon', [i('.fa.fa-folder')]),
+      a([
+        span('.icon.is-left', [i('.fa.fa-folder')]),
+        d.path
+      ])
     ]))
 
     return {DOM: vnode$, router: path$}
@@ -71,21 +74,40 @@ function main(sources : {DOM: DOMSource, Feathers: typeof feathersSource, router
 
   const projectsVtree$ = projectsSinks.collection$.map(
     c => Collection.pluck(c, sinks => sinks.DOM)
-  ).flatten().map(items => nav('.column.is-3.is-fullheight.panel', [
-    p('.panel-heading', 'Projects'),
-    div('.panel-block', [
-      p('.control.has-icons-left.has-icons-right', [
-        input('.SL-projects-new.input.is-small', {
-          key: Math.random(),
-          attrs: {type: 'text', placeholder: 'New project path...'}
-        }),
-        span('.icon.is-small.is-left', [i('.fa.fa-link')]),
-        span('.icon.is-small.is-right', [i('.fa.fa-plus')])
+  ).flatten().map(items => div('.column.is-narrow', {style: {width: '300px'}}, [
+    section('.hero.is-light', [
+      div('.hero-body', [
+        div('.container', [
+          p('.title', 'Light title'),
+          p('.subtitle', 'Light subtitle')
+        ])
       ])
     ]),
-    ...items,
-    div('.panel-block', [
-      button('.SL-projects-clear.button.is-link.is-outlined.is-fullwidth', 'Clear projects')
+    aside('.menu', [
+      ul('.menu-list', [
+        li([a([
+          span('.icon.is-left', [i('.fa.fa-user-circle')]),
+          `My slots`,
+          span('.tag.is-danger', {style: {marginLeft: '.5em'}},'3')
+        ])]),
+      ]),
+      p('.menu-label', [nav('.level', [
+        div('.level-left', [ 'Projects' ]),
+        div('.level-right', [ a('.SL-projects-clear.button.is-small', 'Clear') ])
+      ])]),
+      ul('.menu-list', [
+        li([
+          p('.control.has-icons-left.has-icons-right', [
+            input('.SL-projects-new.input.is-small', {
+              key: Math.random(),
+              attrs: {type: 'text', placeholder: 'New project path...'}
+            }),
+            span('.icon.is-small.is-left', [i('.fa.fa-link')]),
+            span('.icon.is-small.is-right', [i('.fa.fa-plus')])
+          ])
+        ]),
+        ...items,
+      ]),
     ])
   ]))
   const projectsRequest$ = xs.merge(
