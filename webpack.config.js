@@ -1,19 +1,20 @@
-
 const webpack = require('webpack')
 const path = require('path')
 const ProgressBarPlugin =
   require('progress-bar-webpack-plugin')
 const nodeExternals = require('webpack-node-externals')
 
+const ENV = process.env.NODE_ENV
+
 const config = {
   watch: true,
   cache: true,
-  context: path.join(__dirname, 'src'),
+  //context: path.join(__dirname, 'src'),
   resolve: {
     extensions: ['.ts', '.js', '.json', '.sass'],
     modules: ['node_modules']
   },
-  plugins: [new ProgressBarPlugin()],
+  plugins: [],
   module: {rules: [{
     test: /\.[tj]sx?$/,
     use: {
@@ -24,10 +25,16 @@ const config = {
   }]}
 }
 
-const compiler = webpack([
+module.exports = [
   {...config,
     name: 'client',
-    entry: './client/client.ts',
+    entry: (ENV === 'production'
+      ? ['./src/client/client.ts']
+      : [
+        'webpack-dev-server/client?http://localhost:8080',
+        './src/client/client.ts'
+      ]
+    ),
     target: 'web',
     module: {rules: [
       ...config.module.rules,
@@ -36,6 +43,15 @@ const compiler = webpack([
         loaders: ['style-loader', 'css-loader', 'sass-loader']
       }
     ]},
+    plugins: [...config.plugins, ...(ENV === 'production'
+      ? [new webpack.optimize.UglifyJSPlugin({minimize: true})]
+      : [new webpack.HotModuleReplacementPlugin()]
+    )],
+    devServer: {
+      historyApiFallback: true,
+      contentBase: './',
+      hot: true
+    },
     output: {
       path: path.join(__dirname, 'public'),
       filename: 'client.bundle.js'
@@ -43,7 +59,7 @@ const compiler = webpack([
   },
   {
     name: 'server',
-    entry: './server.ts',
+    entry: './src/server.ts',
     target: 'node',
     externals: [nodeExternals()],
     output: {
@@ -52,6 +68,4 @@ const compiler = webpack([
     },
     ...config
   }
-], (err, stats) => {
-  if (err) logger.error('Webpack:', err)
-})
+]
