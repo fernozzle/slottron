@@ -6,7 +6,7 @@ module.exports = {
     all: [],
     find: [],
     get: [],
-    create: [upsert('project', 'path')],
+    create: [upsert],
     update: [],
     patch: [],
     remove: []

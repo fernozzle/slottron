@@ -27,7 +27,7 @@ module.exports = function () {
       all: [],
       find: [],
       get: [],
-      create: [excludeByPath, setCreatedAt('dateAdded')],
+      create: [excludeByFields('path'), setCreatedAt('dateAdded')],
       update: [],
       patch: [],
       remove: []
@@ -62,21 +62,32 @@ module.exports = function () {
 
 function clearItemsToo(hook) {
   const {service, app, params, id} = hook
-  console.log('id', id, 'params', params)
   const items = app.service('items/')
-  if (id) return items.remove(id).then(x => hook)
-  if (params._id) return items.remove(null, {query: {'project': params._id}}).then(x => hook)
-  return items.remove(null).then(x => hook)
+
+  const queryId = params &&
+    params.query && params.query[service.id]
+  const project = id || queryId
+
+  return items.remove(null,
+    {query: project ? {project} : null}
+  ).then(() => hook)
 }
 
-function excludeByPath({service, data}) {
-  console.log('IT IS ME!!!')
-  return service.find(
-    {query: {path: data['path']}}
-  ).then(result => {
-    if (result.total == 0) return;
-    throw new Error('already exists')
-  })
+function excludeByFields(...keys) {
+  return function ({service, data, path}) {
+
+    const query = {}
+    for (const key of keys) query[key] = data[key]
+
+    return service.find({query}).then(result => {
+      if (result.total == 0) return;
+      throw new Error(
+        `Item ${result.data[0][service.id]} ` +
+        `matching ${JSON.stringify(query)} ` +
+        `already exists on service '${path}'`
+      )
+    })
+  }
 }
 function makeFile({app, data}) {
   const fn = path.join(
