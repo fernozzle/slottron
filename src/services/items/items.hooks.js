@@ -1,11 +1,12 @@
 const pattern = require('../../pattern')
+const upsert = require('../../hooks/upsert')
 
 module.exports = {
   before: {
     all: [],
     find: [],
     get: [],
-    create: [],
+    create: [upsert('project', 'path')],
     update: [],
     patch: [],
     remove: []
@@ -31,7 +32,9 @@ module.exports = {
     }],
     */
 
-    create: [],
+    create: [hook => {
+      console.log('created', hook.result)
+    }],
     update: [],
     patch: [],
     remove: []

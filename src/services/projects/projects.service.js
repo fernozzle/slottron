@@ -41,7 +41,7 @@ module.exports = function () {
       update: [],
       patch: [],
       // remove: []
-      remove: [clearItemsToo] // Why
+      remove: [clearItemsToo]
     },
 
     error: {
