@@ -6,6 +6,7 @@ const createModel = require('../../models/projects.model');
 const filters = require('./projects.filters');
 
 const {setCreatedAt} = require('feathers-hooks-common');
+import {primaryKey} from '../../common'
 
 module.exports = function () {
   const app = this;
@@ -65,7 +66,7 @@ function clearItemsToo(hook) {
   const items = app.service('items/')
 
   const queryId = params &&
-    params.query && params.query[service.id]
+    params.query && params.query[primaryKey]
   const project = id || queryId
 
   return items.remove(null,
@@ -82,7 +83,7 @@ function excludeByFields(...keys) {
     return service.find({query}).then(result => {
       if (result.total == 0) return;
       throw new Error(
-        `Item ${result.data[0][service.id]} ` +
+        `Item ${result.data[0][primaryKey]} ` +
         `matching ${JSON.stringify(query)} ` +
         `already exists on service '${path}'`
       )

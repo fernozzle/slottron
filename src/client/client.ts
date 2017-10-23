@@ -41,29 +41,33 @@ function main(sources : {DOM: DOMSource, Feathers: typeof feathersSource, router
 
   // Fetch items
 
-
-  const itemSinks = Feathers.collectionStream('items/', sources => {
-    const {datum$, DOM} = sources
-    const vnode$ = datum$.map(d => div( '.item',
+  function ItemComponent(sources: any) {
+    const {Item} = sources
+    const vnode$ = Item.state$.map(d => div('.item',
       {class: {'fake': !d.isReal}},
       `What is popping, James? ` + JSON.stringify(d)
     ))
     return {DOM: vnode$}
-  }, datum => datum.id, {DOM: sources.DOM})
-  const itemsVtree$ = itemSinks.collection$.map(
-    c => Collection.pluck(c, sinks => sinks.DOM)
-  ).flatten().map(nodes => div('.column', nodes))
+  }
+  const itemSinks = Feathers.collectionStream({
+    service: 'items/',
+    query: null,
+    item: ItemComponent,
+    collectSinks: instances => ({
+      DOM: instances.pickCombine('DOM')
+    })
+  })(sources)
 
   // Fetch projects
   const sidebarComp = SidebarComp(sources)
 
   const vtree$ = xs.combine(
-    itemsVtree$,
+    itemSinks.DOM,
     sidebarComp.DOM
   ).map(([list, project]) => div('.columns.is-fullheight',
     [
       project,
-      list
+      div('.column', list)
     ]
   ))
 

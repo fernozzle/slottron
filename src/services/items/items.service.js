@@ -2,13 +2,15 @@
 const createService = require('feathers-memory');
 const hooks = require('./items.hooks');
 const filters = require('./items.filters');
+import {primaryKey} from '../../common'
 
 module.exports = function () {
   const app = this;
 
   const options = {
     name: 'items',
-    paginate: app.get('paginate')
+    paginate: app.get('paginate'),
+    id: primaryKey
   };
 
   // Initialize our service with any options it requires

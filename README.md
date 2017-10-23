@@ -24,6 +24,11 @@ Getting up and running is as easy as 1, 2, 3.
     ```
     npm start
     ```
+
+## Notes
+
+- It seems that chokidar won't emit events if it's watching a directory it's accessing with the wrong capitalization. This only applies to the path to the root directory - pattern matching of files within Slottron is case-sensitive.
+
 ## Changelog
 
 __0.1.0__

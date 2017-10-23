@@ -4,10 +4,12 @@
  * Welcome to the home of the world's most awe-inspiring function.
  */
 
-import {default as xs, Subscription, Listener} from 'xstream'
+import {default as xs, Subscription, Listener, MemoryStream} from 'xstream'
 import * as feathers from 'feathers/client'
-import Collection from './collection'
-import {SlottronModels} from './common'
+import {makeCollection, StateSource, Instances} from 'cycle-onionify'
+import {SlottronModels, primaryKey} from './common'
+
+import {matcher} from 'feathers-commons'
 
 interface RequestBase<S, M> {service: S, method: M, params: feathers.Params, [key: string]: any}
 interface IDPart {id: number | string}
@@ -40,6 +42,7 @@ interface Result<T> {
   patch: T,
   remove: T
 }
+const CHANNEL_NAME = 'Item'
 
 /**
  * The world's most awe-inspiring function.
@@ -79,7 +82,7 @@ export function makeFeathersDriver<S>(client: feathers.Application) {
     })
     response$.addListener({})
 
-    return {
+    const source = {
       listen<T extends Partial<R>>({service: name, on}: T) {
         const service = client.service(name)
         let cb = null as any
@@ -104,54 +107,84 @@ export function makeFeathersDriver<S>(client: feathers.Application) {
       collectionStream<
         Name extends keyof S,
         Passed extends {},
-        Added extends {datum: S[Name], datum$: xs<S[Name]>, remove$: xs<S[Name]>},
+        Added extends {
+          datum: S[Name],
+          datum$: MemoryStream<S[Name]>,
+          remove$: xs<S[Name]>,
+          service: feathers.Service<S[Name]> & {path: string} // Grr
+        },
         Sinks extends {}
-      >(
+      >(opts: {
         service: Name,
-        component: (sources: Passed & Added) => Sinks,
-        idSelector?: (model: S[Name]) => string | number,
-        passedSources?: Passed,
-        fetch$ = xs.empty()
-      ) {
+        query?: any,
+        item: ({}) => ({}),
+        collectSinks: (instances: Instances<any>) => any,
+        fetch$?: xs<any>
+      }) {
+
+        const {service, item} = opts
+        const serv = client.service(service) as feathers.Service<S[Name]> & {path: string}
         function sameID(datum: any) {
-          return (other: any) => idSelector(datum) === idSelector(other)
+          return (other: any) => datum[primaryKey] === other[primaryKey]
         }
-        const collection$ = this.response({
-          service, method: 'find'
-        }).flatten().map(({data}: feathers.Pagination<S[Name]>) => {
 
-          const sourcesOfAnAdd$ = xs.merge(
-            xs.fromArray(data),
-            this.listen({service, on: 'created'})
-          ).map((datum: any) => ({
-            datum, // For those who seek synchonosity
-            datum$: this.listen({service, on: 'patched'})
-              .filter(sameID(datum)).startWith(datum),
-            remove$: this.listen({service, on: 'removed'})
-              .filter(sameID(datum))
-          })) as xs<Added>
+        const matches = matcher(opts.query)
+        // const params = Object.keys(query).length > 0 ? {params: {query}} : {}
+        const params = {}
 
-          return Collection(
-            (sources: Passed & Added) => Object.assign(
-              {remove$: sources.remove$},
-              component(sources)
-            ),
-            passedSources,
-            sourcesOfAnAdd$,
-            (sinks: any) => sinks.remove$,
-            (sources: Passed & Added) => idSelector(sources.datum)
-          )
-        }) as xs<xs<Sinks[]>>
+        const that = this as typeof source
 
-        const request$ = xs.merge(
-          fetch$, xs.of(null)
-        ).mapTo({
-          service, method: 'find'
-        }) as xs<RequestBase<typeof service, 'find'>>
+        const state$ = that.response({
+          service, method: 'find', ...params
+        }).flatten().map(({data}) => {
+          const initDict = new Map(data.map(
+            item => [item[primaryKey], item] as [string, S[Name]]
+          ))
+          return xs.merge(
+            that.listen({service, on: 'created'}),
+            that.listen({service, on: 'patched'}),
+            that.listen({service, on: 'removed'})
+              .map(x => Object.assign({'__delete__': true}, x))
+          ).fold((dict, item) => {
+            console.log('For the record, primaryKey is', primaryKey, 'and our item is', item)
+            const id = item[primaryKey]
+            if (!item['__delete__']) {
+              dict.set(id, item)
+              console.log('dict', service, dict)
+              return dict
+            }
+            dict.delete(id)
+            return dict
+          }, initDict).map(dict => [...dict.values()])
+        }).flatten()
 
-        return {collection$, Feathers: request$}
+        const addedSources = {
+          service: serv,
+          [CHANNEL_NAME]: new StateSource(state$, `Items of ${service}`)
+        }
+
+        const collect = makeCollection({
+          item,
+          collectSinks: instances => {
+            const sinks = opts.collectSinks(instances)
+            const newFeathers = xs.merge(
+              sinks.Feathers || xs.never(), // The items' sink
+              xs.merge(
+                xs.of(null), // Ensure there's one initial request
+                opts.fetch$ || xs.empty(), // Add fetch$
+              ).mapTo({service, method: 'find'}) as xs<RequestBase<typeof service, 'find'>>
+            )
+            return {...sinks, Feathers: newFeathers}
+          },
+          itemScope: key => key,
+          itemKey: item => item[primaryKey],
+          channel: CHANNEL_NAME
+        })
+
+        return (sources) => collect({...sources, ...addedSources})
       }
     }
+    return source
   }
 }
 

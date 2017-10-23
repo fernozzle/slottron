@@ -1,8 +1,9 @@
 import xs from 'xstream'
+import sampleCombine from 'xstream/extra/sampleCombine'
 import {DOMSource, VNode, div, section, nav, a, span, i, p, aside, ul, li, input} from '@cycle/dom'
 
 import {makeFeathersSource} from '../feathers-driver'
-import {SlottronModels} from '../common'
+import {SlottronModels, primaryKey} from '../common'
 
 import Collection from '../collection'
 
@@ -15,34 +16,40 @@ export default function SidebarComp(sources: {
 }) {
   const {Feathers, DOM} = sources
 
-  const sinks = Feathers.collectionStream('projects/', sources => {
-    const {datum, datum$, DOM} = sources
+  function ItemComponent(sources: any) {
+    const {Item: {state$}, DOM, service} = sources
+    DOM.select('.panel-block').events('click')
 
-    const path$ = DOM.select('.panel-block').events('click')
-      .mapTo(`/projects/${datum._id}`)
+    const path$ = DOM.select('.SL-choose').events('click')
+      .debug(e => console.log('event', e))
+      .compose(sampleCombine(state$))
+      .map(([, item]) => `/projects/${item[primaryKey]}`)
 
-    const vnode$ = datum$.map(d => li([ a([
+    const vnode$ = state$.map(d => li([ a('.SL-choose', [
       span('.icon.is-left', [i('.fa.fa-folder')]),
       d.path
     ]) ]))
 
     return {DOM: vnode$, router: path$}
-  }, datum => datum._id, {DOM: sources.DOM})
+  }
+  const itemSinks = Feathers.collectionStream({
+    service: 'projects/',
+    // query: null,
+    item: ItemComponent,
+    collectSinks: instances => ({
+      DOM: instances.pickCombine('DOM'),
+      router: instances.pickMerge('router')
+    })
+  })(sources)
 
-  // DOM out
-
-  const vtree$ = sinks.collection$.map(
-    c => Collection.pluck(c, sinks => sinks.DOM)
-  ).flatten().map(items => div('.column.is-narrow.sidebar',
+  const vtree$ = itemSinks.DOM.map(nodes => div(
+    '.column.is-narrow.sidebar',
     {style: {width: '300px'}},
     [ div('.sidebar-pages', [
-      // div('.sidebar-page', [UserPage(items)]),
-      div('.sidebar-page', [ProjectPage(items)]),
+      div('.sidebar-page', [UserPage(nodes)]),
+      // div('.sidebar-page', [ProjectPage(items)]),
     ])]
   ))
-
-  // Feathers out
-
   const request$ = xs.merge(
     DOM.select('.SL-projects-new').events('keydown')
       .filter((e: KeyboardEvent) => e.keyCode === 13)
@@ -56,16 +63,13 @@ export default function SidebarComp(sources: {
       method: 'remove',
       id: null
     }),
-    sinks.Feathers,
+    itemSinks.Feathers
   )
-  const projectsPath$ = sinks.collection$.map(
-    c => Collection.merge(c, sinks => sinks.router)
-  ).flatten()
 
   return {
     Feathers: request$,
     DOM: vtree$,
-    router: projectsPath$
+    router: itemSinks.router
   }
 }
 

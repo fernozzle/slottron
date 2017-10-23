@@ -33,7 +33,7 @@ module.exports = {
     */
 
     create: [hook => {
-      console.log('created', hook.result)
+      // console.log('created', hook.result)
     }],
     update: [],
     patch: [],

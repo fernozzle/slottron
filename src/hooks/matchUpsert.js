@@ -1,3 +1,4 @@
+import {primaryKey} from '../common'
 /**
  * For CREATE requests.
  * If an item that has the same values at each of `idByKeys`
@@ -15,7 +16,7 @@ module.exports = function (...idByKeys) {
     return service.find({ query }).then(page => {
       if (page.total === 0) return hook // It's new: create
       return service.patch(
-        page.data[0][service.id],
+        page.data[0][primaryKey],
         data
       ).then(result => {
         hook.result = result

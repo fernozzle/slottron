@@ -65,7 +65,7 @@ import {run} from '@cycle/run'
 import Collection from './collection'
 import xs from 'xstream'
 import {makeFeathersDriver, FeathersRequestStream} from './feathers-driver'
-import {SlottronModels} from './common'
+import {SlottronModels, primaryKey} from './common'
 
 import * as fs from 'fs'
 const chokidar = require('chokidar')
@@ -86,59 +86,58 @@ app.set('SL-steps', [
 ])
 
 const feathersDriver = makeFeathersDriver<SlottronModels>(app)
-
 const feathersSource = (false as true) && feathersDriver(null) /* Ha */
 
 function main(sources : {Feathers: typeof feathersSource}) {
   const {Feathers} = sources
 
-  const itemSinks = Feathers.collectionStream('projects/', sources => {
-    const {datum: {path, _id: project}} = sources
+  function ItemComponent(sources: any) {
+    const {Item, service} = sources
+    const request$ = Item.state$.map(item => {
+      const {path, [primaryKey]: project} = item
 
-    const watcher = chokidar.watch('.', {
-      cwd: path, ignoreInitial: false, alwaysStat: true
-    }) as EventEmitter
+      const watcher = chokidar.watch('.', {
+        cwd: path, ignoreInitial: false, alwaysStat: true
+      }) as EventEmitter
 
-    const fileChange$ = xs.create({
-      start: l => watcher
-        .on('add', (path, {size, ctime: date}) => l.next({type: 'add', path, size, date}))
-        .on('change', (path, {size, ctime: date}) => l.next({type: 'update', path, size, date}))
-        .on('unlink', path => l.next({type: 'remove', path})),
-      stop: () => {}
-    })
-    const itemsReq$ = fileWatch({fileChange$, watcher, steps: app.get('SL-steps')})
+      const fileChange$ = xs.create({
+        start: l => watcher
+          .on('add', (path, {size, ctime: date}) => l.next({type: 'add', path, size, date}))
+          .on('change', (path, {size, ctime: date}) => l.next({type: 'update', path, size, date}))
+          .on('unlink', path => l.next({type: 'remove', path})),
+        stop: () => {}
+      })
 
-    const request$ = xs.merge(
-      xs.of({
+      const event$ = fileWatch({fileChange$, watcher, steps: app.get('SL-steps')})
+      const changeRequest$ = event$.filter(
+        (x: any) => !x.activity
+      ).map((x: any) => {
+        const {type, step, path, isReal, group} = x
+        const id = `${project}.${path}`
+        if (type === 'remove') return { method: 'remove', id }
+        return { method: 'create', data: {
+          [primaryKey]: id, project, step, path, isReal, group} }
+      })
+      const clearRequest$ = xs.of({
         method: 'remove',
         id: null, // clear project's items
         params: {query: {project}}
-      }),
-      itemsReq$.filter((x: any) => !x.activity)
-      .map((x: any) => {
-        const {type, step, path, isReal, group} = x
-        if (type === 'remove') return {
-          method: 'remove',
-          id: null as any,
-          params: {query: {project}}
-        }
-        return {
-          method: 'create',
-          data: {project, step, path, isReal, group}
-        }
       })
-    ).map((x: any) => ({service: 'items/', ...x}))
 
+      return xs.merge(clearRequest$, changeRequest$)
+        .map((x: any) => ({service: 'items/', ...x}))
+    }).flatten()
     return {Feathers: request$}
-  }, datum => datum._id, {})
+  }
 
-  const itemsRequest$ = xs.merge(
-    itemSinks.Feathers,
-    itemSinks.collection$.map(
-      c => Collection.merge(c, sinks => sinks.Feathers)
-    ).flatten()
-  )
-  return {Feathers: itemsRequest$}
+  return Feathers.collectionStream({
+    service: 'projects/',
+    query: null,
+    item: ItemComponent,
+    collectSinks: instances => ({
+      Feathers: instances.pickMerge('Feathers')
+    })
+  })(sources)
 }
 
 run(main, {Feathers: feathersDriver})

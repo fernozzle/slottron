@@ -1,8 +1,9 @@
+import {primaryKey} from '../common'
 
 // Upsert - a create hook
 module.exports = function(hook) {
   const {data, service} = hook
-  const id = data[service.id]
+  const id = data[primaryKey]
 
   return service.get(id)
     // This is skipped if the item doesn't exist

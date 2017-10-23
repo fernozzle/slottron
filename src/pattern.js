@@ -53,13 +53,4 @@ pattern.renderDummy = function(parsed) {
   return pattern.render(parsed, dict)
 }
 
-/*
-const parsed = pattern.parse('cool-art-{title}-hires.png')
-console.log('it is HEEERE', parsed)
-const rendered = pattern.render(parsed, {id: 'fakeid', title: 'great-renaissance'})
-console.log('now RENDERED', rendered)
-const dict = pattern.read(parsed, rendered)
-console.log('now READ', dict)
-*/
-
 module.exports = pattern
