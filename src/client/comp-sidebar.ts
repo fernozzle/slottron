@@ -147,7 +147,8 @@ function UserPage(items: VNode[]) {
       ]),
       div('.hero-body', [
         div('.container', [
-          p('.title', 'The Show'),
+          a('.back', [span('.icon', [i('.fa.fa-lg.fa-chevron-left')])]),
+          p('.title', ['The Show']),
           p('.subtitle', 'Episode 78')
         ])
       ]),

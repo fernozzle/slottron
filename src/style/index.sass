@@ -54,10 +54,11 @@ $sidebar-itemgap: 1rem
     font-size: larger
 .main-card
   background: white
-  border-top-left-radius: .5rem
-  border-top-right-radius: .5rem
+  border-top-left-radius:  .8rem
+  border-top-right-radius: .8rem
   overflow-x: hidden
   overflow-y: auto
+  box-shadow: rgba(0,0,0,.3) 0 40px 100px
   & > p
     padding: 1.5rem 3rem
 
@@ -82,6 +83,15 @@ $sidebar-itemgap: 1rem
     padding: .5rem
   .hero-body
     padding: 1rem $sidebar-pad 1.5rem
+    a.back
+      position: absolute
+      top: 0
+      left: 0
+      transform: translateX(-100%)
+      color: inherit
+      .icon
+        height: 2.5rem
+        width: 2rem
 
 .menu
   padding-top: 1rem
