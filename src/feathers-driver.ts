@@ -122,35 +122,35 @@ export function makeFeathersDriver<S>(client: feathers.Application) {
         fetch$?: xs<any>
       }) {
 
-        const {service, item} = opts
+        const {service, item, query} = opts
         const serv = client.service(service) as feathers.Service<S[Name]> & {path: string}
         function sameID(datum: any) {
           return (other: any) => datum[primaryKey] === other[primaryKey]
         }
 
-        const matches = matcher(opts.query)
-        // const params = Object.keys(query).length > 0 ? {params: {query}} : {}
-        const params = {}
+        const matches = matcher(query)
+        const params = Object.keys(query || {}).length > 0 ? {params: {query}} : {}
+        console.log('query is', params)
 
         const that = this as typeof source
 
-        const state$ = that.response({
-          service, method: 'find', ...params
-        }).flatten().map(({data}) => {
+        const req = { service, method: 'find', ...params } as any
+        const state$ = that.response(req).flatten().map(({data}) => {
+          console.log('result is', data)
           const initDict = new Map(data.map(
-            item => [item[primaryKey], item] as [string, S[Name]]
-          ))
+            item => [item[primaryKey], item]
+          )) as Map<string, S[Name]>
           return xs.merge(
             that.listen({service, on: 'created'}),
             that.listen({service, on: 'patched'}),
             that.listen({service, on: 'removed'})
               .map(x => Object.assign({'__delete__': true}, x))
           ).fold((dict, item) => {
-            console.log('For the record, primaryKey is', primaryKey, 'and our item is', item)
             const id = item[primaryKey]
-            if (!item['__delete__']) {
+            const itMatches = matches(item)
+            console.log('does', item, 'match with', query, '?', itMatches)
+            if (!item['__delete__'] && itMatches) {
               dict.set(id, item)
-              console.log('dict', service, dict)
               return dict
             }
             dict.delete(id)
@@ -172,7 +172,7 @@ export function makeFeathersDriver<S>(client: feathers.Application) {
               xs.merge(
                 xs.of(null), // Ensure there's one initial request
                 opts.fetch$ || xs.empty(), // Add fetch$
-              ).mapTo({service, method: 'find'}) as xs<RequestBase<typeof service, 'find'>>
+              ).mapTo(req) as xs<RequestBase<typeof service, 'find'>>
             )
             return {...sinks, Feathers: newFeathers}
           },

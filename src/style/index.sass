@@ -6,6 +6,9 @@ $light: #fff
 $menu-item-hover-background-color: $light
 $navbar-tab-active-color: inherit
 $navbar-tab-active-border-bottom-color: $primary
+$navbar-tab-hover-border-bottom-color: $primary
+
+$column-gap: .3rem
 
 @import "~bulma/bulma"
 
@@ -34,7 +37,7 @@ $sidebar-itemgap: 1rem
     display: flex
     flex-direction: column
     padding-left: $sidebar-width
-    padding-right: 1rem
+    padding-right: .5rem
     pointer-events: none
     & > *
       pointer-events: all
@@ -53,14 +56,18 @@ $sidebar-itemgap: 1rem
     font-weight: bold
     font-size: larger
 .main-card
+  flex-grow: 1
   background: white
-  border-top-left-radius:  .8rem
-  border-top-right-radius: .8rem
+  border-top-left-radius:  .6rem
+  border-top-right-radius: .6rem
   overflow-x: hidden
   overflow-y: auto
+  border-left: 2px solid #ffc
   box-shadow: rgba(0,0,0,.3) 0 40px 100px
-  & > p
-    padding: 1.5rem 3rem
+  & > *
+    padding: 0 3rem
+    &:last-child
+      margin-bottom: 3rem
 
 .sidebar-pages
   width: $sidebar-width
@@ -131,3 +138,38 @@ li:not(:last-child)
     height: 1.2rem
 
     background: hsla(0, 0%, 0%, .3)
+
+.main-card
+  .level
+    position: sticky
+    top: 0
+    padding: 2rem 3rem .5rem
+    z-index: 1
+    background: inherit
+
+  .step-section
+    margin-top: 2rem
+
+  .item
+    display: flex
+    margin: 0
+
+    border: 0
+    transition: opacity .5s
+    background: $white
+    border-radius: .3rem
+    overflow: hidden
+    align-items: stretch
+    &.fake
+      opacity: .2
+    .media-left
+      width: 4rem
+      background:
+        color: #333
+        size: cover
+        position: center
+    .media-content
+      padding: 1em 0 1em
+      min-width: 0
+    .media-right
+      padding: .5em .5em 0 0

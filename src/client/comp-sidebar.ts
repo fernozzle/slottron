@@ -21,7 +21,6 @@ export default function SidebarComp(sources: {
     DOM.select('.panel-block').events('click')
 
     const path$ = DOM.select('.SL-choose').events('click')
-      .debug(e => console.log('event', e))
       .compose(sampleCombine(state$))
       .map(([, item]) => `/projects/${item[primaryKey]}`)
 

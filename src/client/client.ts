@@ -1,8 +1,9 @@
 import {run} from '@cycle/run'
-import {makeDOMDriver, div, input, nav, p, span, a, i, button, DOMSource, aside, ul, li, section, header} from '@cycle/dom'
+import {makeDOMDriver, div, input, nav, p, span, a, i, button, DOMSource, aside, ul, li, section, header, h1, figure, img} from '@cycle/dom'
 import Collection from '../collection'
 import xs from 'xstream'
 import sampleCombine from 'xstream/extra/sampleCombine'
+import dropRepeats from 'xstream/extra/dropRepeats'
 
 import {routerify, RouteMatcherReturn} from 'cyclic-router'
 import {makeHashHistoryDriver} from '@cycle/history'
@@ -27,44 +28,57 @@ function main(sources : {DOM: DOMSource, Feathers: typeof feathersSource, router
 
   const match$ = sources.router.define({
     '/': 'home sweet home',
-    '/other': 'nice other place',
-    '/deebee': 'the deeb land',
     '/projects': {
-      '/': 'all projects ever',
-      '/:id':  id => `Home of project ${id}`,
-      '/:id/members/:jd': (id, jd) => `Project ${id}, member ${jd}`,
+      '/': null,
+      '/:id':  id => ({project: id}),
+      '/:id/step/:jd': (id, jd) => ({project: id, step: jd}),
     },
   }) as xs<RouteMatcherReturn>
-  const page$ = match$.map(({path, value}: {path: string, value: any}) => {
-    console.log('We are at', path, 'which is', value)
-    console.log('Thongo', sources.router.path(path))
-  })
-  page$.addListener({})
+  match$.addListener({next: ({path, value}: {path: string, value: any}) => {
+    console.log(`We are at '${path}', which is`, value)
+  }})
+
 
   // Fetch items
 
   function ItemComponent(sources: any) {
     const {Item} = sources
-    const vnode$ = Item.state$.map(d => div('.item',
+    const vnode$ = Item.state$.map(d => div(
+      '.column.is-half',
+      [
+        div('.item.media', {class: {'fake': !d.isReal}}, [
+          figure('.media-left', {style: {backgroundImage: 'url(https://bulma.io/images/placeholders/128x128.png)'}}),
+          div('.media-content', [
+            p('.title.is-5', d.path),
+            p('.subtitle.is-6', ['From ', i(d.group)])
+          ]),
+          div('.media-right', a('.has-text-grey-dark', [span('.icon', [i('.fa.fa-chevron-down')])]))
+        ])
+      ]
+    ))
+/*     const vnode$ = Item.state$.map(d => div('.item',
       {class: {'fake': !d.isReal}},
       `What is popping, James? ` + JSON.stringify(d)
-    ))
+    )) */
     return {DOM: vnode$}
   }
-  const itemSinks = Feathers.collectionStream({
-    service: 'items/',
-    query: null,
-    item: ItemComponent,
-    collectSinks: instances => ({
-      DOM: instances.pickCombine('DOM')
-    })
-  })(sources)
+  const itemSinks$ = match$.map(({value}) => {
+    const query = value.project && {project: value.project}
+    return Feathers.collectionStream({
+      service: 'items/',
+      query,
+      item: ItemComponent,
+      collectSinks: instances => ({
+        DOM: instances.pickCombine('DOM')
+      })
+    })(sources)
+  })
 
   // Fetch projects
   const sidebarComp = SidebarComp(sources)
 
   const vtree$ = xs.combine(
-    itemSinks.DOM,
+    itemSinks$.map(sinks => sinks.DOM).flatten(),
     sidebarComp.DOM
   ).map(([list, project]) => div('.root',
     [
@@ -81,7 +95,18 @@ function main(sources : {DOM: DOMSource, Feathers: typeof feathersSource, router
           ])
         ]),
         div('.main-card', [
-          p(list)
+          div('.level', [
+            div('.level-left', [p('.title.is-3', 'Storyboards')]),
+            div('.level-right', [
+              div('.navbar-tabs', [
+                a('.navbar-item.is-tab.is-active', 'A/Z'),
+                a('.navbar-item.is-tab', 'Recent'),
+                a('.navbar-item.is-tab', 'Is Done')
+              ])
+            ])
+          ]),
+
+          div('.step-section.columns.is-multiline', list),
         ])
       ])
     ]
@@ -93,9 +118,9 @@ function main(sources : {DOM: DOMSource, Feathers: typeof feathersSource, router
       Feathers.response({service: 'projects/', method: 'create'})
         .flatten().map(x => `/projects/${x._id}`),
       sidebarComp.router
-    ),
+    ).compose(dropRepeats()),
     Feathers: xs.merge(
-      itemSinks.Feathers,
+      itemSinks$.map(sinks => sinks.Feathers).flatten(),
       sidebarComp.Feathers
     )
   }
