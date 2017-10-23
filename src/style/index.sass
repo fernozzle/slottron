@@ -4,11 +4,17 @@ $primary: hsl(348, 100%, 61%)
 $light: #fff
 
 $menu-item-hover-background-color: $light
+$navbar-tab-active-color: inherit
+$navbar-tab-active-border-bottom-color: $primary
 
 @import "~bulma/bulma"
 
-body, #main > .columns
+html, body
   height: 100%
+  overflow: hidden
+
+$sidebar-width: 270px
+$sidebar-head-height: 150px
 
 $sidebar-pad: 2rem
 $sidebar-itemgap: 1rem
@@ -16,14 +22,74 @@ $sidebar-itemgap: 1rem
 .is-left
   margin-right: .5rem
 
+.root
+  height: 100%
+  position: relative
+  overflow: hidden
+  & > *
+    position: absolute
+    width: 100%
+    height: 100%
+  & > .main-container
+    display: flex
+    flex-direction: column
+    padding-left: $sidebar-width
+    padding-right: 1rem
+    pointer-events: none
+    & > *
+      pointer-events: all
+  & > .sidebar
+    &::before
+      display: block
+      position: absolute
+      content: ''
+      width: 100%
+      height: $sidebar-head-height
+      background: #ddd
+
+.navbar
+  background: transparent
+  & > header
+    font-weight: bold
+    font-size: larger
+.main-card
+  background: white
+  border-top-left-radius: .5rem
+  border-top-right-radius: .5rem
+  overflow-x: hidden
+  overflow-y: auto
+  & > p
+    padding: 1.5rem 3rem
+
+.sidebar-pages
+  width: $sidebar-width
+  position: relative
+  transform: translateZ(0)
+  transition: transform .2s
+  // &:hover
+  //   transform: translate3D(-100%, 0, 0)
+  & > *
+    width: inherit
+    position: absolute
+    left: 0
+    top: 0
+    &:nth-child(2)
+      left: 100%
+
 .hero
+  height: $sidebar-head-height
   .hero-head
-    padding: 1rem 1rem 0
+    padding: .5rem
   .hero-body
     padding: 1rem $sidebar-pad 1.5rem
 
 .menu
   padding-top: 1rem
+  & > p.menu-label
+    margin: 0
+    padding:
+      left: $sidebar-pad
+      right: $sidebar-pad
   & > ul > li > a
     margin: 0 $sidebar-itemgap
     border-radius: $radius-large
@@ -38,23 +104,6 @@ $sidebar-itemgap: 1rem
   button
     margin-top: .5rem
 
-.sidebar
-  overflow: hidden
-
-.sidebar-pages
-  width: inherit
-  position: relative
-  transform: translateZ(0)
-  transition: transform .2s
-  // &:hover
-  //   transform: translate3D(-100%, 0, 0)
-  & > *
-    width: inherit
-    position: absolute
-    left: 0
-    top: 0
-    &:nth-child(2)
-      left: 100%
 
 li:not(:last-child)
   .fa-circle-o

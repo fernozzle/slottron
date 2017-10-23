@@ -43,12 +43,13 @@ export default function SidebarComp(sources: {
   })(sources)
 
   const vtree$ = itemSinks.DOM.map(nodes => div(
-    '.column.is-narrow.sidebar',
-    {style: {width: '300px'}},
-    [ div('.sidebar-pages', [
-      div('.sidebar-page', [UserPage(nodes)]),
-      // div('.sidebar-page', [ProjectPage(items)]),
-    ])]
+    '.sidebar',
+    [
+      div('.sidebar-pages', [
+        div('.sidebar-page', [UserPage(nodes)]),
+        // div('.sidebar-page', [ProjectPage(items)]),
+      ])
+    ]
   ))
   const request$ = xs.merge(
     DOM.select('.SL-projects-new').events('keydown')
@@ -75,7 +76,7 @@ export default function SidebarComp(sources: {
 
 function ProjectPage(items: VNode[]) {
   return div([
-    section('.hero.is-light', [
+    section('.hero', [
       div('.hero-head', [
         nav('.level', [
           div('.level-left'),
@@ -133,7 +134,7 @@ function ProjectPage(items: VNode[]) {
 
 function UserPage(items: VNode[]) {
   return div([
-    section('.hero.is-light', [
+    section('.hero', [
       div('.hero-head', [
         nav('.level', [
           div('.level-left'),
@@ -146,8 +147,8 @@ function UserPage(items: VNode[]) {
       ]),
       div('.hero-body', [
         div('.container', [
-          p('.title', 'Light title'),
-          p('.subtitle', 'Light subtitle')
+          p('.title', 'The Show'),
+          p('.subtitle', 'Episode 78')
         ])
       ]),
     ]),
